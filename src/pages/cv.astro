@@ -1,0 +1,134 @@
+---
+import Layout from '../layouts/Layout.astro';
+import CVSection from '../components/CVSection.astro';
+import CVEntry from '../components/CVEntry.astro';
+---
+
+<Layout title="CV - Artem Shmatko" description="Curriculum Vitae of Artem Shmatko - AI researcher and PhD student">
+	<header class="mb-10">
+		<h1 class="text-4xl font-light mb-4 text-gray-800">Curriculum Vitae</h1>
+		<div class="text-gray-500 space-y-1 font-light">
+			<p>Heidelberg, Germany</p>
+			<p>
+				<a href="https://github.com/yozhikoff" class="text-indigo-800 hover:text-indigo-900 transition-colors">GitHub</a> • 
+				<a href="https://scholar.google.co.uk/citations?user=UXQl-IwAAAAJ&hl=en" class="text-indigo-800 hover:text-indigo-900 transition-colors">Google Scholar</a>
+			</p>
+		</div>
+	</header>
+
+	<CVSection title="Research Interests">
+		<div class="space-y-3 text-gray-700 leading-relaxed">
+			<p>
+				My research interests lie in large-scale (medical) predictive systems and computational pathology, with particular focus on real-world applications beyond curated datasets. I'm especially interested in model generalisability, synthetic data generation, namely diffusion models, and pioneering solutions in emerging fields where established approaches don't yet exist.
+			</p>
+			<p>
+				In my free time, I like to explore deep learning as a tool for creativity.
+			</p>
+		</div>
+	</CVSection>
+
+	<CVSection title="Education">
+		<div class="space-y-5">
+			<CVEntry 
+				title="Ph.D. in Computer Science"
+				organization="Heidelberg University"
+				period="October 2021 - present"
+			/>
+			<CVEntry 
+				title="Master's-level Program in CS and ML"
+				organization="Yandex School of Data Analysis"
+				period="September 2022 - May 2024"
+			/>
+			<CVEntry 
+				title="BS/MS Applied and Fundamental Physical Chemistry"
+				organization="Moscow State University"
+				period="September 2015 - August 2021"
+			/>
+		</div>
+	</CVSection>
+
+	<CVSection title="Research & Work Experience">
+		<div class="space-y-8">
+			<CVEntry 
+				title="Visiting Scientist, Birney Group"
+				organization="European Bioinformatics Institute (EBI)"
+				period="May 2024 - present"
+				stack="Python, PyTorch"
+				details={[
+					"Designed a custom transformer model that estimates future disease risk based on previous medical history, surpassing the performance of traditional clinical score-based risk models",
+					"Led the team during the project, coordinated manuscript preparation and created all illustrations"
+				]}
+			/>
+			
+			<CVEntry 
+				title="Doctoral Researcher, Computational Histopathology"
+				organization="Division of AI in Oncology (German Cancer Research Center)"
+				period="October 2021 - May 2025"
+				stack="Python, PyTorch, PyTorch-Lightning, Bash, LSF"
+				details={[
+					"Collaborated with institutions across seven countries to develop a transformer-based SOTA model for brain tumour classification, directly targeting clinical application",
+					"Improved performance of tumour classification models by utilising SSL methods (DINO, iBOT), fine-tuned on in-house data",
+					"Identified the main causes of performance drop when validating on external cohorts"
+				]}
+			/>
+			
+			<CVEntry 
+				title="Research Intern, Cancer Evolution Group"
+				organization="European Bioinformatics Institute (EBI)"
+				period="June 2019 - September 2019"
+				stack="Python, PyTorch, Pyro, PyMC4, Bash, R, LSF"
+				details={[
+					'Mathematically formulated, implemented, and maintained a popular cell type decomposition package (<a href="https://github.com/BayraktarLab/cell2location" class="text-indigo-600 hover:text-indigo-800">cell2location</a>, 300+ GitHub stars)',
+					"Developed a Bayesian model for spatial cancer genomics data using Gaussian Processes",
+					"Implemented a cell nuclei segmentation pipeline suitable for ultra-large images (up to 100k x 100k px)"
+				]}
+			/>
+		</div>
+	</CVSection>
+
+	<CVSection title="Selected Publications">
+		<div class="space-y-5">
+			<div>
+				<p class="text-gray-700 leading-relaxed">
+					<span class="font-normal">Learning the natural history of human disease with generative transformers</span><br>
+					<span class="text-gray-600 text-sm"><strong>Shmatko, A.</strong>, Jung, A.W., N., Gerstung, M. et al. • Preprint, <em>medRxiv</em> • 2024</span>
+				</p>
+			</div>
+			<div>
+				<p class="text-gray-700 leading-relaxed">
+					<span class="font-normal">Artificial intelligence in histopathology: enhancing cancer research and clinical oncology</span><br>
+					<span class="text-gray-600 text-sm"><strong>Shmatko, A.</strong>, Ghaffari Laleh, N., Gerstung, M. et al. • <em>Nature Cancer</em> • 3, 1026–1038 • 2022</span>
+				</p>
+			</div>
+			<div>
+				<p class="text-gray-700 leading-relaxed">
+					<span class="font-normal">Comprehensive mapping of tissue cell architecture via integrated single cell and spatial transcriptomics</span><br>
+					<span class="text-gray-600 text-sm">Kleshchevnikov, V., <strong>Shmatko, A.</strong>, Dann, E. et al. • <em>Nature Biotechnology</em> • 40, 661–671 • 2022</span>
+				</p>
+			</div>
+			<div>
+				<p class="text-gray-700 leading-relaxed">
+					<span class="font-normal">Spatial genomics maps the structure, nature and evolution of cancer clones</span><br>
+					<span class="text-gray-600 text-sm">Lomakin, A., Svedlund, J., Strell, C., Gataric M., <strong>Shmatko, A.</strong> et al. • <em>Nature</em> • 611, 594–602 • 2022</span>
+				</p>
+			</div>
+		</div>
+	</CVSection>
+
+	<CVSection title="Talks & Conferences">
+		<CVEntry 
+			title="Computational histopathology enables high-granularity diagnostics in CNS tumours"
+			organization="The 19th Meeting of the European Association of Neuro-Oncology"
+			period="Glasgow, UK • 2024"
+			details={["Oral presentation"]}
+		/>
+	</CVSection>
+
+	<CVSection title="Other Skills & Hobbies">
+		<ul class="text-gray-700 space-y-2 list-disc ml-5">
+			<li><strong>Languages:</strong> English (fluent), Russian (native), German (intermediate), Japanese (intermediate)</li>
+			<li><strong>Technical:</strong> Chemistry lab skills & experience</li>
+			<li><strong>Hobbies:</strong> Photography (especially astrophotography), travelling, scuba diving, reading sci-fi</li>
+		</ul>
+	</CVSection>
+</Layout>

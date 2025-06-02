@@ -1,0 +1,35 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getEntry } from 'astro:content';
+
+const linksEntry = await getEntry('data', 'links');
+const { Content } = await linksEntry.render();
+---
+
+<Layout title={linksEntry.data.title + " - Artem Shmatko"} description={linksEntry.data.description}>
+	<header class="mb-16">
+		<h1 class="text-4xl font-normal mb-4 text-gray-900">{linksEntry.data.title}</h1>
+		<p class="text-xl text-gray-600 leading-relaxed">
+			{linksEntry.data.description}
+		</p>
+	</header>
+
+	<style is:global>
+		/* Links page styling */
+		.prose h2 { 
+			@apply text-2xl font-normal text-indigo-800 mb-4 mt-8 first:mt-0;
+		}
+		
+		.prose p strong a { 
+			@apply text-lg font-medium text-gray-800 hover:text-indigo-800 transition-colors;
+		}
+		
+		.prose p:not(:has(strong)) { 
+			@apply text-gray-600 text-sm leading-relaxed ml-0 mb-4;
+		}
+	</style>
+
+	<div class="prose prose-lg max-w-none">
+		<Content />
+	</div>
+</Layout>

@@ -1,0 +1,201 @@
+---
+import BooksSidebar from '../components/BooksSidebar.astro';
+import Navigation from '../components/Navigation.astro';
+
+export interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+		<noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
+		<style is:global>
+			:root {
+				/* Brand Colors */
+				--color-primary: #4f46e5;
+				--color-primary-light: #c7d2fe;
+				--color-primary-dark: #3730a3;
+				--color-accent: #6366f1;
+				
+				/* Grays */
+				--color-gray-50: #f9fafb;
+				--color-gray-100: #f3f4f6;
+				--color-gray-200: #e5e7eb;
+				--color-gray-600: #4b5563;
+				--color-gray-700: #374151;
+				--color-gray-900: #111827;
+				
+				/* Spacing */
+				--space-section: 3rem;
+				--space-section-sm: 2rem;
+				
+				/* Typography */
+				--font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+			}
+			
+			/* Selection styling */
+			::selection {
+				background-color: var(--color-accent);
+				color: white;
+			}
+			::-moz-selection {
+				background-color: var(--color-accent);
+				color: white;
+			}
+			
+			/* Base font */
+			body {
+				font-family: var(--font-family);
+			}
+		</style>
+		<title>{title}</title>
+		{description && <meta name="description" content={description} />}
+	</head>
+	<body class="bg-gray-50 text-gray-900 font-sans min-h-screen">
+		<!-- Menu button (all screen sizes) -->
+		<button 
+			id="menu-btn"
+			class="fixed top-4 left-4 z-50 bg-white border border-gray-200 rounded-md p-2 shadow-sm hover:bg-gray-50 transition-colors"
+			aria-label="Toggle menu"
+		>
+			<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+			</svg>
+		</button>
+
+		<div class="flex min-h-screen">
+			<!-- Sidebar -->
+			<aside 
+				id="sidebar"
+				class="w-80 bg-white border-r border-gray-200 fixed h-full overflow-y-auto transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out z-40"
+			>
+				<div class="p-6 pt-16 flex flex-col h-full">
+					<!-- Header -->
+					<div class="mb-8">
+						<a href="/" class="block">
+							<h1 class="text-2xl font-normal text-gray-900 tracking-tight">Artem Shmatko</h1>
+							<p class="text-sm text-gray-600 mt-1">AI Researcher & PhD Student</p>
+						</a>
+					</div>
+
+					<!-- Navigation -->
+					<Navigation />
+
+					<!-- Spacer to push bottom sections down -->
+					<div class="flex-1"></div>
+
+					<!-- Currently Reading -->
+					<BooksSidebar />
+				</div>
+			</aside>
+
+			<!-- Main Content -->
+			<main id="main-content" class="flex-1 transition-all duration-300 ease-in-out md:ml-80">
+				<div class="container mx-auto px-4 md:px-8 py-12 pt-16 max-w-4xl">
+					<slot />
+				</div>
+			</main>
+		</div>
+
+		<!-- Overlay for mobile -->
+		<div 
+			id="overlay"
+			class="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30 opacity-0 pointer-events-none transition-opacity duration-300"
+		></div>
+
+		<script>
+			// Menu toggle for all screen sizes
+			const menuBtn = document.getElementById('menu-btn');
+			const sidebar = document.getElementById('sidebar');
+			const overlay = document.getElementById('overlay');
+			const mainContent = document.getElementById('main-content');
+			const navLinks = document.querySelectorAll('nav a');
+			
+			function toggleMenu() {
+				const isDesktop = window.innerWidth >= 768;
+				
+				if (isDesktop) {
+					// On desktop, check if sidebar is currently visible
+					const isOpen = sidebar.classList.contains('translate-x-0') || 
+								  (!sidebar.classList.contains('-translate-x-full') && !sidebar.classList.contains('translate-x-0'));
+					
+					if (isOpen) {
+						// Close on desktop
+						sidebar.classList.add('-translate-x-full');
+						sidebar.classList.remove('translate-x-0', 'md:translate-x-0');
+						mainContent.classList.remove('md:ml-80');
+					} else {
+						// Open on desktop
+						sidebar.classList.remove('-translate-x-full');
+						sidebar.classList.add('translate-x-0');
+						mainContent.classList.add('md:ml-80');
+					}
+				} else {
+					// Mobile behavior
+					const isOpen = sidebar.classList.contains('translate-x-0');
+					
+					if (isOpen) {
+						// Close menu
+						sidebar.classList.remove('translate-x-0');
+						sidebar.classList.add('-translate-x-full');
+						overlay.classList.add('opacity-0', 'pointer-events-none');
+					} else {
+						// Open menu
+						sidebar.classList.remove('-translate-x-full');
+						sidebar.classList.add('translate-x-0');
+						overlay.classList.remove('opacity-0', 'pointer-events-none');
+					}
+				}
+			}
+			
+			// Initialize JavaScript state to match CSS default state
+			function initSidebar() {
+				if (window.innerWidth >= 768) {
+					// On desktop, CSS makes sidebar visible by default
+					// Make sure JavaScript knows it's open
+					sidebar.classList.remove('-translate-x-full');
+					sidebar.classList.add('translate-x-0');
+				}
+			}
+			
+			// Auto-close only on mobile when clicking nav links
+			navLinks.forEach(link => {
+				link.addEventListener('click', (event) => {
+					// Only auto-close on mobile
+					if (window.innerWidth < 768) {
+						setTimeout(() => toggleMenu(), 100);
+					}
+					// On desktop, don't close sidebar - it should persist
+				});
+			});
+			
+			menuBtn?.addEventListener('click', toggleMenu);
+			overlay?.addEventListener('click', toggleMenu);
+			
+			// Handle window resize
+			window.addEventListener('resize', () => {
+				if (window.innerWidth >= 768) {
+					overlay.classList.add('opacity-0', 'pointer-events-none');
+				}
+			});
+			
+			// Initialize on page load
+			initSidebar();
+			
+			// A little surprise for curious developers 🐱
+			console.log("🐱 Curious human detected! Thanks for peeking at the code~ \n✨ Built with Astro, lots of curiosity, and a dash of feline energy \n🧬 Now go discover something amazing in computational biology!");
+		</script>
+	</body>
+</html>

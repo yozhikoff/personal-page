@@ -1,0 +1,36 @@
+---
+// Get current page for navigation highlighting
+const currentPath = Astro.url.pathname;
+
+const navItems = [
+	{ href: '/', label: 'Home', exact: true },
+	{ href: '/cv', label: 'Curriculum Vitae' },
+	{ href: '/blog', label: 'Blog' },
+	{ href: '/links', label: 'Links' }
+];
+
+function isActive(item, currentPath) {
+	if (item.exact) {
+		return currentPath === item.href;
+	}
+	return currentPath === item.href || currentPath === `${item.href}/` || 
+		   (item.href === '/blog' && currentPath.startsWith('/blog'));
+}
+---
+
+<nav class="mb-8">
+	<div class="space-y-1">
+		{navItems.map((item) => (
+			<a 
+				href={item.href}
+				class={`block px-3 py-2 rounded-md text-sm transition-colors ${
+					isActive(item, currentPath)
+						? 'bg-indigo-100 text-indigo-800 font-medium' 
+						: 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+				}`}
+			>
+				{item.label}
+			</a>
+		))}
+	</div>
+</nav>

@@ -1,0 +1,26 @@
+---
+export interface Props {
+	title: string;
+	organization: string;
+	period: string;
+	stack?: string;
+	details?: string[];
+}
+
+const { title, organization, period, stack, details = [] } = Astro.props;
+---
+
+<div>
+	<h3 class="text-lg font-normal text-gray-800">{title}</h3>
+	<p class="text-gray-500 mb-3 font-light">{organization} • {period}</p>
+	{stack && (
+		<p class="text-gray-600 mb-3 font-light"><span class="font-normal">Stack:</span> {stack}</p>
+	)}
+	{details.length > 0 && (
+		<ul class="text-gray-600 space-y-2 list-disc ml-5 font-light">
+			{details.map((detail) => (
+				<li set:html={detail}></li>
+			))}
+		</ul>
+	)}
+</div>

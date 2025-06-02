@@ -1,0 +1,80 @@
+---
+import { getEntry } from 'astro:content';
+
+const booksEntry = await getEntry('data', 'books');
+
+// Parse the raw markdown content to extract book data
+const rawContent = booksEntry.body;
+const books = [];
+
+// Split by ## headings to get individual books
+const sections = rawContent.split(/^## /m).filter(section => section.trim());
+
+for (const section of sections) {
+	const lines = section.split('\n').filter(line => line.trim());
+	if (lines.length === 0) continue;
+	
+	const title = lines[0].trim();
+	let author = '';
+	let progress = '';
+	let cover = '';
+	
+	// Extract metadata from **Field:** format
+	for (const line of lines.slice(1)) {
+		if (line.includes('**Author:**')) {
+			author = line.replace('**Author:**', '').trim();
+		} else if (line.includes('**Progress:**')) {
+			progress = line.replace('**Progress:**', '').trim();
+		} else if (line.includes('**Cover:**')) {
+			cover = line.replace('**Cover:**', '').trim();
+		}
+	}
+	
+	if (title && author && progress && cover) {
+		books.push({ title, author, progress, cover });
+	}
+}
+---
+
+<div class="mb-6">
+	<h2 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">{booksEntry.data.title}</h2>
+	<div class="space-y-3">
+		{books.map((book) => (
+			<div class="bg-gray-50 rounded-lg p-3">
+				<div class="flex gap-3">
+					<div class="w-12 h-16 bg-gray-200 rounded shadow-sm flex-shrink-0 relative overflow-hidden">
+						<img 
+							src={book.cover} 
+							alt={`${book.title} cover`}
+							class="w-full h-full object-cover"
+							loading="lazy"
+							decoding="async"
+							onload="this.style.opacity='1'; this.nextElementSibling.style.display='none'"
+							onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"
+							style="opacity: 0; transition: opacity 0.3s ease;"
+						/>
+						<div class="absolute inset-0 bg-gray-200 flex items-center justify-center text-xs text-gray-500 font-medium">
+							{book.title.split(' ').map(word => word[0]).join('').slice(0, 2).toUpperCase()}
+						</div>
+					</div>
+					<div class="flex-1 min-w-0">
+						<h3 class="text-sm font-medium text-gray-900 truncate">{book.title}</h3>
+						<p class="text-xs text-gray-600 mt-1">{book.author}</p>
+						<div class="mt-2">
+							<div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+								<span>Progress</span>
+								<span>{book.progress}</span>
+							</div>
+							<div class="w-full bg-gray-200 rounded-full h-1">
+								<div 
+									class="bg-indigo-600 h-1 rounded-full transition-all duration-300" 
+									style={`width: ${book.progress}`}
+								></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		))}
+	</div>
+</div>

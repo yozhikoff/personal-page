@@ -1,0 +1,80 @@
+---
+// Interactive DNA sequence generator component
+---
+
+<div class="dna-widget border border-gray-200 rounded-lg p-6 bg-gray-50 my-6">
+  <h3 class="text-lg font-medium text-gray-800 mb-4">🧬 DNA Sequence Generator</h3>
+  <p class="text-gray-600 mb-4 text-sm">Generate random DNA sequences for testing and exploration.</p>
+  
+  <div class="flex gap-3 mb-4">
+    <button 
+      id="generate-btn" 
+      class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition-colors"
+    >
+      Generate Sequence
+    </button>
+    
+    <select id="length-select" class="border border-gray-300 rounded px-3 py-2">
+      <option value="10">10 bases</option>
+      <option value="20" selected>20 bases</option>
+      <option value="50">50 bases</option>
+      <option value="100">100 bases</option>
+    </select>
+  </div>
+  
+  <div class="bg-white border rounded p-4">
+    <label class="block text-sm font-medium text-gray-700 mb-2">Generated Sequence:</label>
+    <div 
+      id="dna-output" 
+      class="font-mono text-lg tracking-wide text-gray-800 min-h-[2rem] break-all"
+    >
+      Click "Generate Sequence" to start!
+    </div>
+  </div>
+  
+  <div class="mt-4 text-xs text-gray-500">
+    <strong>Legend:</strong> A = Adenine, T = Thymine, G = Guanine, C = Cytosine
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const generateBtn = document.getElementById('generate-btn');
+    const lengthSelect = document.getElementById('length-select');
+    const output = document.getElementById('dna-output');
+    
+    function generateDNA() {
+      const bases = ['A', 'T', 'G', 'C'];
+      const colors = {
+        'A': '#ef4444', // red
+        'T': '#3b82f6', // blue  
+        'G': '#10b981', // green
+        'C': '#f59e0b'  // amber
+      };
+      
+      const length = parseInt(lengthSelect.value);
+      const sequence = Array.from({length}, () => 
+        bases[Math.floor(Math.random() * bases.length)]
+      );
+      
+      // Create colored sequence
+      const coloredSequence = sequence.map(base => 
+        `<span style="color: ${colors[base]}; font-weight: 600;">${base}</span>`
+      ).join('');
+      
+      output.innerHTML = coloredSequence;
+      
+      // Add some animation
+      output.style.opacity = '0';
+      setTimeout(() => {
+        output.style.opacity = '1';
+        output.style.transition = 'opacity 0.3s ease';
+      }, 100);
+    }
+    
+    generateBtn.addEventListener('click', generateDNA);
+    
+    // Generate initial sequence
+    generateDNA();
+  });
+</script>

@@ -1,0 +1,198 @@
+---
+// Interactive protein structure visualization
+---
+
+<div class="protein-viz border border-gray-200 rounded-lg p-6 bg-gray-50 my-6">
+  <h3 class="text-lg font-medium text-gray-800 mb-4">🧪 Protein Structure Visualizer</h3>
+  <p class="text-gray-600 mb-4 text-sm">Explore amino acid interactions in a simplified protein model.</p>
+  
+  <div class="flex gap-3 mb-4">
+    <button 
+      id="animate-btn" 
+      class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors"
+    >
+      Start Animation
+    </button>
+    
+    <button 
+      id="reset-btn" 
+      class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+    >
+      Reset
+    </button>
+    
+    <select id="structure-select" class="border border-gray-300 rounded px-3 py-2">
+      <option value="helix">Alpha Helix</option>
+      <option value="sheet" selected>Beta Sheet</option>
+      <option value="random">Random Coil</option>
+    </select>
+  </div>
+  
+  <div class="bg-white border rounded p-4">
+    <svg id="protein-svg" width="100%" height="300" viewBox="0 0 600 300" class="border rounded">
+      <!-- Protein visualization will be drawn here -->
+    </svg>
+  </div>
+  
+  <div class="mt-4 text-xs text-gray-500">
+    <strong>Amino Acids:</strong> 
+    <span class="inline-block w-3 h-3 bg-red-400 rounded mr-1"></span>Hydrophobic
+    <span class="inline-block w-3 h-3 bg-blue-400 rounded mr-1 ml-3"></span>Hydrophilic
+    <span class="inline-block w-3 h-3 bg-green-400 rounded mr-1 ml-3"></span>Charged
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const animateBtn = document.getElementById('animate-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const structureSelect = document.getElementById('structure-select');
+    const svg = document.getElementById('protein-svg');
+    
+    let animationId;
+    let isAnimating = false;
+    
+    // Amino acid types with colors
+    const aminoTypes = [
+      { type: 'hydrophobic', color: '#f87171', name: 'Phe' },
+      { type: 'hydrophilic', color: '#60a5fa', name: 'Ser' },
+      { type: 'charged', color: '#4ade80', name: 'Lys' },
+      { type: 'hydrophobic', color: '#f87171', name: 'Val' },
+      { type: 'hydrophilic', color: '#60a5fa', name: 'Thr' },
+      { type: 'charged', color: '#4ade80', name: 'Asp' },
+      { type: 'hydrophobic', color: '#f87171', name: 'Leu' },
+      { type: 'hydrophilic', color: '#60a5fa', name: 'Gln' }
+    ];
+    
+    function clearSVG() {
+      svg.innerHTML = '';
+    }
+    
+    function drawProtein(structure) {
+      clearSVG();
+      
+      const numAminos = aminoTypes.length;
+      const centerX = 300;
+      const centerY = 150;
+      
+      aminoTypes.forEach((amino, i) => {
+        let x, y;
+        
+        switch(structure) {
+          case 'helix':
+            const helixRadius = 80;
+            const angle = (i / numAminos) * Math.PI * 4; // 2 full turns
+            x = centerX + Math.cos(angle) * helixRadius;
+            y = centerY + Math.sin(angle) * helixRadius + (i * 20);
+            break;
+            
+          case 'sheet':
+            x = 100 + (i * 60);
+            y = centerY + (i % 2 === 0 ? -30 : 30);
+            break;
+            
+          case 'random':
+            x = 100 + Math.random() * 400;
+            y = 50 + Math.random() * 200;
+            break;
+        }
+        
+        // Draw connection lines
+        if (i > 0) {
+          const prevAmino = svg.querySelector(`#amino-${i-1}`);
+          if (prevAmino) {
+            const prevX = parseFloat(prevAmino.getAttribute('cx'));
+            const prevY = parseFloat(prevAmino.getAttribute('cy'));
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', prevX);
+            line.setAttribute('y1', prevY);
+            line.setAttribute('x2', x);
+            line.setAttribute('y2', y);
+            line.setAttribute('stroke', '#9ca3af');
+            line.setAttribute('stroke-width', '2');
+            svg.appendChild(line);
+          }
+        }
+        
+        // Draw amino acid
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('id', `amino-${i}`);
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', '12');
+        circle.setAttribute('fill', amino.color);
+        circle.setAttribute('stroke', '#374151');
+        circle.setAttribute('stroke-width', '2');
+        circle.style.cursor = 'pointer';
+        
+        // Add label
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', y + 4);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', 'white');
+        text.setAttribute('font-size', '10');
+        text.setAttribute('font-weight', 'bold');
+        text.textContent = amino.name;
+        
+        svg.appendChild(circle);
+        svg.appendChild(text);
+        
+        // Add hover effect
+        circle.addEventListener('mouseenter', function() {
+          circle.setAttribute('r', '15');
+          circle.style.filter = 'brightness(1.2)';
+        });
+        
+        circle.addEventListener('mouseleave', function() {
+          circle.setAttribute('r', '12');
+          circle.style.filter = 'brightness(1)';
+        });
+      });
+    }
+    
+    function animate() {
+      if (!isAnimating) return;
+      
+      const circles = svg.querySelectorAll('circle');
+      circles.forEach((circle, i) => {
+        const currentR = parseFloat(circle.getAttribute('r'));
+        const newR = 12 + Math.sin(Date.now() * 0.01 + i) * 3;
+        circle.setAttribute('r', newR);
+      });
+      
+      animationId = requestAnimationFrame(animate);
+    }
+    
+    function toggleAnimation() {
+      if (isAnimating) {
+        isAnimating = false;
+        cancelAnimationFrame(animationId);
+        animateBtn.textContent = 'Start Animation';
+        animateBtn.className = 'bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors';
+      } else {
+        isAnimating = true;
+        animate();
+        animateBtn.textContent = 'Stop Animation';
+        animateBtn.className = 'bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors';
+      }
+    }
+    
+    function reset() {
+      isAnimating = false;
+      cancelAnimationFrame(animationId);
+      animateBtn.textContent = 'Start Animation';
+      animateBtn.className = 'bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors';
+      drawProtein(structureSelect.value);
+    }
+    
+    // Event listeners
+    animateBtn.addEventListener('click', toggleAnimation);
+    resetBtn.addEventListener('click', reset);
+    structureSelect.addEventListener('change', reset);
+    
+    // Initialize
+    drawProtein('sheet');
+  });
+</script>
