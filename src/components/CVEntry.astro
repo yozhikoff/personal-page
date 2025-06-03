@@ -5,9 +5,14 @@ export interface Props {
 	period: string;
 	stack?: string;
 	details?: string[];
+	links?: Array<{
+		label: string;
+		url: string;
+		type?: 'paper' | 'code' | 'data' | 'demo' | 'other';
+	}>;
 }
 
-const { title, organization, period, stack, details = [] } = Astro.props;
+const { title, organization, period, stack, details = [], links = [] } = Astro.props;
 ---
 
 <div>
@@ -22,5 +27,19 @@ const { title, organization, period, stack, details = [] } = Astro.props;
 				<li set:html={detail}></li>
 			))}
 		</ul>
+	)}
+	{links.length > 0 && (
+		<div class="inline-flex gap-3 mt-1">
+			{links.map((link) => (
+				<a 
+					href={link.url} 
+					target="_blank" 
+					rel="noopener noreferrer"
+					class="text-xs text-indigo-600 hover:text-indigo-800 underline decoration-1 underline-offset-2 transition-colors duration-200"
+				>
+					{link.label}
+				</a>
+			))}
+		</div>
 	)}
 </div>
