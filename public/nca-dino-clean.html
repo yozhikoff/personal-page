@@ -1,0 +1,2049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🦕 NCA Dino Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .game-area {
+            margin: 20px auto;
+            position: relative;
+            display: block;
+            background-color: white; /* White background for sky area */
+            border: 3px solid #333;
+            border-radius: 8px;
+        }
+        .nca-canvas {
+            display: block;
+            background-color: white;
+            image-rendering: pixelated;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+        }
+        .dino-character {
+            position: absolute;
+            /* Size set dynamically via JavaScript constants */
+            image-rendering: pixelated;
+            z-index: 25;
+            transition: none;
+            pointer-events: none;
+        }
+        .score-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            z-index: 20;
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        }
+        .game-over-display {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            display: none;
+        }
+        .game-title {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(255, 255, 255, 0.8);
+            z-index: 31;
+            transition: all 0.3s ease;
+            display: none;
+        }
+        .game-title.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .generation-marker {
+            position: absolute;
+            bottom: 0;
+            width: 3px;
+            background-color: #ff0000;
+            height: 128px; /* NCA height * 4 */
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0.7;
+            display: none; /* Hidden by default */
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px auto;
+            font-size: 16px;
+            font-weight: bold;
+            display: block;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .jump-instruction {
+            background-color: #fff3e0;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ff9800;
+            text-align: center;
+            font-size: 18px;
+        }
+        .debug-window {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 20px 0;
+            white-space: pre;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦕 NCA Dino Game</h1>
+        
+        <div class="jump-instruction">
+            <strong>🎮 Controls:</strong> SPACEBAR to Jump, B to throw Bombs! 💣
+        </div>
+        
+        <button id="debugToggleBtn">Show Debug Info</button>
+        
+        <div class="game-area" id="gameArea">
+            <!-- Game area will be 768x240: 192*4 wide, 60*4 tall -->
+            <!-- NCA canvas will be 768x128: 192*4 wide, 32*4 tall (positioned at bottom) -->
+            <canvas id="ncaCanvas" width="768" height="128" class="nca-canvas"></canvas>
+            <div class="generation-marker" id="generationMarker"></div>
+            <img id="dinoCharacter" class="dino-character" src="/dino_assets/DinoRun1.png" alt="Dino">
+            <div class="score-display" id="scoreDisplay">0</div>
+            <div class="game-over-display" id="gameOverDisplay"></div>
+            <div class="game-title" id="gameTitle">Dino in NCA-land</div>
+        </div>
+        
+        <div class="debug-window" id="debugWindow" style="display: none;">Debug info will appear here...</div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort.min.js"></script>
+    <script>
+        // 🚀 MONKEY-PATCH ONNX TENSOR WITH MULTI-DIMENSIONAL ACCESS!
+        
+        // Calculate strides for tensor shape [batch, channels, height, width]
+        ort.Tensor.prototype.calculateStrides = function() {
+            if (!this._strides) {
+                const shape = this.dims;
+                this._strides = new Array(shape.length);
+                this._strides[shape.length - 1] = 1;
+                for (let i = shape.length - 2; i >= 0; i--) {
+                    this._strides[i] = this._strides[i + 1] * shape[i + 1];
+                }
+            }
+            return this._strides;
+        };
+        
+        // Get value at [batch, channel, y, x]
+        ort.Tensor.prototype.get = function(b, c, y, x) {
+            const strides = this.calculateStrides();
+            const index = b * strides[0] + c * strides[1] + y * strides[2] + x * strides[3];
+            return this.data[index];
+        };
+        
+        // Set value at [batch, channel, y, x]
+        ort.Tensor.prototype.set = function(b, c, y, x, value) {
+            const strides = this.calculateStrides();
+            const index = b * strides[0] + c * strides[1] + y * strides[2] + x * strides[3];
+            this.data[index] = value;
+        };
+        
+        // Set entire channel to a value
+        ort.Tensor.prototype.setChannel = function(b, c, value) {
+            const [batch, channels, height, width] = this.dims;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    this.set(b, c, y, x, value);
+                }
+            }
+        };
+        
+        // Set vertical column in a channel
+        ort.Tensor.prototype.setColumn = function(b, c, x, value) {
+            const [batch, channels, height, width] = this.dims;
+            for (let y = 0; y < height; y++) {
+                this.set(b, c, y, x, value);
+            }
+        };
+        
+        // Fill entire tensor with value
+        ort.Tensor.prototype.fill = function(value) {
+            this.data.fill(value);
+        };
+        
+        // Copy from another tensor
+        ort.Tensor.prototype.copyFrom = function(otherTensor) {
+            if (this.data.length !== otherTensor.data.length) {
+                throw new Error('Tensor size mismatch');
+            }
+            this.data.set(otherTensor.data);
+        };
+        
+        // Resize tensor by creating new one and copying data
+        ort.Tensor.prototype.resize = function(newWidth) {
+            const [batchSize, channels, height, oldWidth] = this.dims;
+            const newData = new Float32Array(batchSize * channels * height * newWidth);
+            const newTensor = new ort.Tensor(this.type, newData, [batchSize, channels, height, newWidth]);
+            
+            // Copy existing data (batch is always 0 for our use case)
+            const batch = 0;
+            const copyWidth = Math.min(oldWidth, newWidth);
+            
+            for (let c = 0; c < channels; c++) {
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < copyWidth; x++) {
+                        const value = this.get(batch, c, y, x);
+                        newTensor.set(batch, c, y, x, value);
+                    }
+                }
+            }
+            
+            return newTensor;
+        };
+        
+        // Trim tensor from left side
+        ort.Tensor.prototype.trimLeft = function(trimAmount) {
+            const [batchSize, channels, height, oldWidth] = this.dims;
+            const newWidth = oldWidth - trimAmount;
+            const newData = new Float32Array(batchSize * channels * height * newWidth);
+            const newTensor = new ort.Tensor(this.type, newData, [batchSize, channels, height, newWidth]);
+            
+            // Copy remaining data (batch is always 0 for our use case)
+            const batch = 0;
+            
+            for (let c = 0; c < channels; c++) {
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < newWidth; x++) {
+                        const value = this.get(batch, c, y, x + trimAmount);
+                        newTensor.set(batch, c, y, x, value);
+                    }
+                }
+            }
+            
+            return newTensor;
+        };
+        
+        // Get tensor info string
+        ort.Tensor.prototype.getInfo = function() {
+            return `[${this.dims.join(', ')}]`;
+        };
+
+        class NCADinoGame {
+            constructor() {
+                this.canvas = document.getElementById('ncaCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.generationMarker = document.getElementById('generationMarker');
+                this.dinoCharacter = document.getElementById('dinoCharacter');
+                this.gameArea = document.getElementById('gameArea');
+                this.scoreDisplay = document.getElementById('scoreDisplay');
+                this.gameOverDisplay = document.getElementById('gameOverDisplay');
+                this.gameTitle = document.getElementById('gameTitle');
+                this.debugWindow = document.getElementById('debugWindow');
+                this.debugToggleBtn = document.getElementById('debugToggleBtn');
+                
+                // Game area dimensions
+                this.gameWidth = 768;  // 192 * 4 pixels
+                this.gameHeight = 240; // 60 * 4 pixels (reduced from 320px to make less tall)
+                this.gameArea.style.width = `${this.gameWidth}px`;
+                this.gameArea.style.height = `${this.gameHeight}px`;
+                
+                // NCA model parameters (will be set based on selection)
+                this.selectedModelSize = 256;  // Default to 256px
+                this.modelWidth = 256;  // NCA model size
+                this.width = 192;       // Viewport width in NCA pixels  
+                this.height = 32;       // NCA height in pixels
+                this.channels = 16;
+                this.pixelScale = 4;    // 4x scaling for bigger visuals!
+                this.fireRate = 0.5;
+                
+                // Native ONNX tensors
+                this.currentState = null;
+                this.session = null;
+                this.currentWidth = this.width;
+                this.windowStartX = 0;
+                this.worldOffset = 0;
+                this.isRunning = false;
+                
+                // Enhanced game state management
+                this.gameState = 'INTRO'; // INTRO, WAITING, PLAYING, GAME_OVER
+                this.gameStartTime = 0;
+                this.bombTutorialShown = false;
+                
+                // Synchronization parameters
+                this.baseScrollSpeed = 55;  // Initial scrolling speed
+                this.currentScrollSpeed = 0;
+                this.ncaStepsPerSecond = 80; // Increased from 30
+                this.generationTargetPercent = 0.75;
+                this.trimThreshold = 64;
+                
+                // PID controller for scroll speed
+                this.speedController = {
+                    kP: 100, kI: 10, kD: 20,
+                    integral: 0, lastError: 0,
+                    maxSpeed: 200, minSpeed: -50
+                };
+                
+                // Performance tracking
+                this.stepTimes = [];
+                this.totalSteps = 0;
+                this.extensionCount = 0;
+                this.trimCount = 0;
+                this.lastUpdateTime = performance.now();
+                this.lastStepTime = performance.now();
+                
+                // Dino game parameters (adjusted for taller game field)
+                this.dinoPosition = 0.15; // 15% of screen width
+                // Ground surface is at row 27 (top of 5-cell thick ground: rows 27-31)
+                this.dinoGroundY = 27; // Ground surface level in NCA pixels (0-based, so row 27)
+                this.dinoY = this.dinoGroundY; // Current Y position in NCA pixels
+                this.dinoVelocityY = 0;
+                this.dinoIsJumping = false;
+                this.dinoJumpPower = -12; // Increase jump power for higher jumps
+                this.dinoGravity = 0.6;
+                this.dinoAnimationFrame = 0;
+                this.dinoLastAnimTime = 0;
+                this.dinoAnimationSpeed = 120; // Faster leg animation (was 200ms)
+                this.dinoLastJumpTime = 0; // Prevent rapid jumping
+                
+                // Scroll speed tracking with EMA for stable jump mechanics
+                this.scrollSpeedEMA = 70; // Initialize with base speed
+                this.scrollSpeedEMAAlpha = 0.02; // EMA smoothing factor (0.1 = slow, 0.9 = fast)
+                
+                // Fixed distance jump mechanics - SACRED REQUIREMENTS!
+                this.fixedJumpDistanceNCAPixels = 8; // Always exactly 8 NCA pixels - NEVER CHANGE!
+                this.targetJumpHeightNCAPixels = 8; // Always exactly 12 NCA pixels - NEVER CHANGE!
+                this.jumpStartWorldX = 0; // World X position when jump started
+                
+                // Dino size constants (25% larger than original 44x47)
+                this.dinoOriginalWidth = 44;
+                this.dinoOriginalHeight = 47;
+                this.dinoScaleFactor = 1.5; // 25% larger
+                this.dinoWidth = this.dinoOriginalWidth * this.dinoScaleFactor; // 55px
+                this.dinoHeight = this.dinoOriginalHeight * this.dinoScaleFactor; // 59px
+                
+                // Dino sprites
+                this.dinoSprites = {
+                    run1: '/dino_assets/DinoRun1.png',
+                    run2: '/dino_assets/DinoRun2.png',
+                    jump: '/dino_assets/DinoJump.png',
+                    start: '/dino_assets/DinoStart.png',
+                    dead: '/dino_assets/DinoDead.png'
+                };
+                
+                // Collision detection
+                this.isGameOver = false;
+                this.showDebugBoxes = false; // Toggle for debug visualization
+                this.cactusBoundingBoxes = [];
+                this.dinoBoundingBoxes = []; // Array of dino bounding boxes (head + body)
+                
+                // Bomb system
+                this.bombs = []; // Array of active bombs
+                this.explosions = []; // Array of active explosions for visual effects
+                this.destroyedAreas = new Set(); // Track destroyed terrain coordinates as "worldX,y" strings
+                this.bombCooldown = 200; // 1 second cooldown between bombs
+                this.lastBombTime = 0;
+                this.bombThrowSpeed = 235; // Horizontal speed in pixels/sec
+                this.bombThrowHeight = -2; // Initial upward velocity
+                this.bombGravity = 82.8; // Gravity for bomb arc
+                this.explosionRadius = 20; // Explosion radius in NCA pixels (increased to destroy full cacti!)
+                this.explosionDuration = 250; // Explosion visual effect duration in ms (super fast!)
+                
+                // Cloud system
+                this.clouds = []; // Array of clouds in the sky
+                this.cloudSpawnChance = 0.00125; // Chance per frame to spawn a cloud (increased spawn rate)
+                this.maxClouds = 8; // Maximum number of clouds on screen
+                this.cloudImage = new Image();
+                this.cloudImage.src = '/dino_assets/Cloud.png';
+                this.cloudImageLoaded = false;
+                this.cloudImage.onload = () => { this.cloudImageLoaded = true; };
+                
+                // Game Over image
+                this.gameOverImage = new Image();
+                this.gameOverImage.src = '/dino_assets/GameOver.png';
+                this.gameOverImageLoaded = false;
+                this.gameOverImage.onload = () => { this.gameOverImageLoaded = true; };
+                
+                // Score tracking
+                this.score = 0; // Score based on world coordinates traveled
+                
+                // Memory monitoring
+                this.memoryStats = {
+                    jsHeapSize: 0,
+                    usedJSHeapSize: 0,
+                    totalJSHeapSize: 0,
+                    tensorMemory: 0,
+                    lastUpdate: 0
+                };
+                
+                // Backend info
+                this.backendInfo = {
+                    name: 'Not loaded',
+                    providers: []
+                };
+                
+                this.setupEventListeners();
+                this.applyDinoSize();
+                this.updateUI();
+                this.positionGenerationMarker();
+                this.updateDino(0);
+                
+                console.log('🚀 Enhanced NCA Dino Game initialized!');
+            }
+            
+            applyDinoSize() {
+                // Apply the calculated dino size to the DOM element
+                this.dinoCharacter.style.width = `${this.dinoWidth}px`;
+                this.dinoCharacter.style.height = `${this.dinoHeight}px`;
+                console.log(`🦕 Dino size set to: ${this.dinoWidth}x${this.dinoHeight}px (${this.dinoScaleFactor}x scale)`);
+            }
+            
+            setupEventListeners() {
+                this.debugToggleBtn.addEventListener('click', () => {
+                    if (this.debugWindow.style.display === 'none') {
+                        this.debugWindow.style.display = 'block';
+                        this.debugToggleBtn.textContent = 'Hide Debug Info';
+                        this.showDebugBoxes = true;
+                        this.generationMarker.style.display = 'block';
+                    } else {
+                        this.debugWindow.style.display = 'none';
+                        this.debugToggleBtn.textContent = 'Show Debug Info';
+                        this.showDebugBoxes = false;
+                        this.generationMarker.style.display = 'none';
+                    }
+                });
+                
+                // Dino jump controls
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        console.log(`🎮 SPACEBAR pressed in state: ${this.gameState}`);
+                        if (this.gameState === 'WAITING') {
+                            this.startPlaying();
+                        } else if (this.gameState === 'PLAYING') {
+                            this.jumpDino();
+                        } else if (this.gameState === 'GAME_OVER') {
+                            console.log('🔄 Spacebar pressed during GAME_OVER - initiating full restart');
+                            this.restartGame();
+                        }
+                    } else if (e.code === 'KeyB' && this.gameState === 'PLAYING') {
+                        e.preventDefault();
+                        this.throwBomb();
+                    }
+                });
+                
+                // Mobile touch controls
+                this.gameArea.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.jumpDino();
+                });
+                
+                // Desktop click controls
+                this.gameArea.addEventListener('click', (e) => {
+                    this.jumpDino();
+                });
+            }
+            
+            positionGenerationMarker() {
+                // Position the red line at 75% of the canvas width
+                const markerPosition = this.canvas.width * this.generationTargetPercent;
+                this.generationMarker.style.left = `${markerPosition}px`;
+                // Update marker height to match canvas
+                this.generationMarker.style.height = `${this.canvas.height}px`;
+            }
+            
+            jumpDino() {
+                const now = performance.now();
+                const timeSinceLastJump = now - this.dinoLastJumpTime;
+                
+                // Only allow jump if not already jumping and 200ms have passed since last jump
+                if (!this.dinoIsJumping && timeSinceLastJump > 200) {
+                    this.dinoIsJumping = true;
+                    this.dinoVelocityY = this.fixedJumpHeight; // Always same jump power = same height
+                    this.dinoCharacter.src = this.dinoSprites.jump;
+                    this.dinoLastJumpTime = now;
+                    
+                    // VARIABLE GRAVITY PER SPEED: Proven approach for EXACT targets!
+                    const targetDistancePixels = this.fixedJumpDistanceNCAPixels * this.pixelScale;
+                    const targetHeightPixels = this.targetJumpHeightNCAPixels * this.pixelScale;
+                    
+                    // Prevent negative/zero speeds
+                    const safeEMASpeed = Math.max(10, Math.abs(this.scrollSpeedEMA));
+                    
+                    // Calculate required duration for exact distance
+                    const requiredDurationSeconds = targetDistancePixels / safeEMASpeed;
+                    
+                    // Calculate exact gravity needed for both distance and height
+                    // Physics: max_height = v0^2 / (2*g) and total_time = 2*v0/g
+                    // Solving: g = 8*h / t^2
+                    const calculatedGravity = (8 * targetHeightPixels) / (requiredDurationSeconds * requiredDurationSeconds);
+                    
+                    // Calculate exact initial velocity for the height
+                    // Physics: v0 = sqrt(2 * g * h)
+                    const calculatedInitialVelocity = -Math.sqrt(2 * calculatedGravity * targetHeightPixels);
+                    
+                    // Use calculated values directly - NO BOUNDS! Trust the math completely!
+                    this.dinoVelocityY = calculatedInitialVelocity;
+                    this.dinoGravity = calculatedGravity;
+                    
+                    // Track jump start position for distance measurement
+                    this.jumpStartWorldX = this.worldOffset;
+                    this.jumpStartTime = now;
+                    this.jumpDurationMs = requiredDurationSeconds * 1000;
+                    
+                    console.log(`🦕 FIXED JUMP: Target=${this.fixedJumpDistanceNCAPixels} NCA pixels, Duration=${requiredDurationSeconds.toFixed(2)}s, Gravity=${this.dinoGravity.toFixed(3)}, EMA=${this.scrollSpeedEMA.toFixed(1)}`);
+                }
+            }
+            
+            throwBomb() {
+                const now = performance.now();
+                const timeSinceLastBomb = now - this.lastBombTime;
+                
+                // Check cooldown
+                if (timeSinceLastBomb < this.bombCooldown) {
+                    console.log(`💣 Bomb on cooldown! ${((this.bombCooldown - timeSinceLastBomb) / 1000).toFixed(1)}s remaining`);
+                    return;
+                }
+                
+                // Calculate bomb starting position (ahead of dino)
+                const dinoGameX = this.gameWidth * this.dinoPosition;
+                const dinoGameY = this.gameHeight - ((this.height - 1 - this.dinoGroundY) * this.pixelScale) - ((this.dinoGroundY - this.dinoY) * this.pixelScale) - this.dinoHeight;
+                
+                // Create new bomb object - FIXED positioning!
+                const bomb = {
+                    id: Date.now() + Math.random(), // Unique ID
+                    x: dinoGameX + this.dinoWidth * 0.5, // Start closer to dino (middle of dino instead of edge)
+                    y: dinoGameY + this.dinoHeight / 2, // Start at dino center height
+                    velocityX: this.bombThrowSpeed, // Bomb's own velocity (don't add scroll speed here!)
+                    velocityY: this.bombThrowHeight, // Initial upward velocity
+                    worldX: this.worldOffset / this.pixelScale + (dinoGameX + this.dinoWidth) / this.pixelScale, // FIXED: Convert worldOffset to NCA coords
+                    startTime: now,
+                    active: true
+                };
+                
+                this.bombs.push(bomb);
+                this.lastBombTime = now;
+                
+                console.log(`💣 BOMB THROWN! Screen: (${bomb.x.toFixed(1)}, ${bomb.y.toFixed(1)}), World NCA: ${bomb.worldX.toFixed(1)}, WorldOffset: ${this.worldOffset.toFixed(1)}, WindowStart: ${this.windowStartX}`);
+            }
+            
+            updateDino(deltaTime) {
+                // Cap delta time to prevent huge jumps (max 33ms = ~30fps minimum)
+                const cappedDeltaTime = Math.min(deltaTime, 0.033);
+                
+                // Update vertical position if jumping
+                if (this.dinoIsJumping) {
+                    const now = performance.now();
+                    const jumpElapsedMs = now - this.jumpStartTime;
+                    
+                    // Let physics handle landing naturally - no ugly time-based teleporting!
+                        // Normal physics while jumping - use proper time scaling
+                        this.dinoY += this.dinoVelocityY * cappedDeltaTime;
+                        this.dinoVelocityY += this.dinoGravity * cappedDeltaTime;
+                        
+                    // Natural physics landing
+                    if (this.dinoY >= this.dinoGroundY) {
+                        // Calculate distance traveled
+                        const distanceTraveled = this.worldOffset - this.jumpStartWorldX;
+                        const ncaPixelsTraveled = distanceTraveled / this.pixelScale;
+                        
+                        this.dinoY = this.dinoGroundY;
+                        this.dinoVelocityY = 0;
+                        this.dinoIsJumping = false;
+                        console.log(`🦕 NATURAL LANDING! ${jumpElapsedMs.toFixed(0)}ms, Distance: ${distanceTraveled.toFixed(1)}px (${ncaPixelsTraveled.toFixed(1)} NCA pixels)`);
+                    }
+                } else if (!this.isGameOver) {
+                    // Run animation when on ground (but not when game over)
+                    const now = performance.now();
+                    if (now - this.dinoLastAnimTime > this.dinoAnimationSpeed) {
+                        this.dinoAnimationFrame = (this.dinoAnimationFrame + 1) % 2;
+                        this.dinoCharacter.src = this.dinoAnimationFrame === 0 ? 
+                            this.dinoSprites.run1 : this.dinoSprites.run2;
+                        this.dinoLastAnimTime = now;
+                    }
+                }
+                
+                // Calculate dino position: 15% of game width
+                const dinoGameX = this.gameWidth * this.dinoPosition;
+                const dinoPixelX = dinoGameX - (this.dinoCharacter.offsetWidth / 2);
+                
+                // Convert NCA Y coordinate to game pixel coordinate
+                // Ground surface is at NCA row 27, which corresponds to specific screen position
+                // NCA row 27 = (32-1-27) * 4 = 20 pixels from bottom of NCA canvas
+                // NCA canvas is positioned at bottom of game area
+                const groundSurfacePixelsFromBottom = (this.height - 1 - this.dinoGroundY) * this.pixelScale;
+                const jumpHeightPixels = (this.dinoGroundY - this.dinoY) * this.pixelScale;
+                const dinoSpriteHeight = this.dinoHeight; // Use constant for sprite height
+                
+                // Position dino feet at ground surface, accounting for jump height
+                const dinoGameY = this.gameHeight - groundSurfacePixelsFromBottom - jumpHeightPixels - dinoSpriteHeight;
+                
+                // Position dino
+                this.dinoCharacter.style.left = `${dinoPixelX}px`;
+                this.dinoCharacter.style.top = `${dinoGameY}px`;
+                
+                // Update dino bounding box for collision detection
+                this.updateDinoBoundingBox(dinoPixelX, dinoGameY);
+            }
+            
+            updateDinoBoundingBox(dinoPixelX, dinoGameY) {
+                // Create two dino bounding boxes: head and body
+                const verticalPaddingTop = 4; // 4px padding top
+                const verticalPaddingBottom = 6; // 6px padding bottom (2px higher than before)
+                const horizontalPadding = 12; // 12px padding left/right
+                
+                const totalWidth = this.dinoWidth - (horizontalPadding * 2);
+                const totalHeight = this.dinoHeight - (verticalPaddingTop + verticalPaddingBottom);
+                
+                // Head bounding box (upper portion, shifted right)
+                const headHeight = Math.floor(totalHeight * 0.4); // 40% of height for head
+                const headRightShift = 2; // Shift head 2px to the right
+                const headBox = {
+                    x: dinoPixelX + horizontalPadding + headRightShift,
+                    y: dinoGameY + verticalPaddingTop,
+                    width: totalWidth,
+                    height: headHeight,
+                    type: 'dino-head'
+                };
+                
+                // Body bounding box (lower portion, shifted left)
+                const bodyHeight = totalHeight - headHeight; // Remaining height for body
+                const bodyLeftShift = 10; // Shift body 10px to the left (8 + 2 more)
+                const bodyBox = {
+                    x: dinoPixelX + horizontalPadding - bodyLeftShift,
+                    y: dinoGameY + verticalPaddingTop + headHeight,
+                    width: totalWidth,
+                    height: bodyHeight,
+                    type: 'dino-body'
+                };
+                
+                this.dinoBoundingBoxes = [headBox, bodyBox];
+            }
+            
+            updateBombs(deltaTime) {
+                if (!this.currentState) return;
+                
+                // Update all active bombs
+                for (let i = this.bombs.length - 1; i >= 0; i--) {
+                    const bomb = this.bombs[i];
+                    if (!bomb.active) continue;
+                    
+                    // Update bomb physics
+                    bomb.x += bomb.velocityX * deltaTime;
+                    bomb.y += bomb.velocityY * deltaTime;
+                    bomb.velocityY += this.bombGravity * deltaTime; // Apply gravity
+                    bomb.worldX += (bomb.velocityX / this.pixelScale) * deltaTime; // FIXED: Update world position in NCA coordinates
+                    
+                    // Check if bomb hits a cactus during flight!
+                    if (this.checkBombCactusCollision(bomb)) {
+                        console.log(`💥 BOMB HIT CACTUS MID-FLIGHT!`);
+                        this.explodeBomb(bomb);
+                        this.bombs.splice(i, 1); // Remove bomb
+                        continue; // Skip ground check since bomb already exploded
+                    }
+                    
+                    // Check if bomb hits ground (NCA terrain level)
+                    const bombNCAY = this.gameHeight - bomb.y;
+                    const groundLevelY = this.gameHeight - ((this.height - 1 - this.dinoGroundY) * this.pixelScale);
+                    
+                    // Check if bomb is off-screen or hits ground
+                    if (bomb.x > this.gameWidth + 100 || bomb.y > groundLevelY) {
+                        // BOOM! Explode the bomb
+                        this.explodeBomb(bomb);
+                        this.bombs.splice(i, 1); // Remove bomb
+                    }
+                }
+            }
+            
+            checkBombCactusCollision(bomb) {
+                // Create bomb bounding box for collision detection
+                const bombSize = 12; // Bomb collision size in pixels
+                const bombBox = {
+                    x: bomb.x - bombSize/2,
+                    y: bomb.y - bombSize/2,
+                    width: bombSize,
+                    height: bombSize
+                };
+                
+                // Convert bomb position to canvas coordinates for cactus collision
+                const bombCanvasY = bomb.y - (this.gameHeight - this.canvas.height);
+                const bombCanvasBox = {
+                    x: bomb.x,
+                    y: bombCanvasY,
+                    width: bombSize,
+                    height: bombSize
+                };
+                
+                // Check collision with all cactus bounding boxes
+                for (const cactus of this.cactusBoundingBoxes) {
+                    if (this.boundingBoxesCollide(bombCanvasBox, cactus)) {
+                        console.log(`💥 Bomb collision with cactus at (${cactus.x}, ${cactus.y})`);
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            updateExplosions(deltaTime) {
+                // Update all active explosions
+                for (let i = this.explosions.length - 1; i >= 0; i--) {
+                    const explosion = this.explosions[i];
+                    if (!explosion.active) continue;
+                    
+                    const now = performance.now();
+                    const elapsed = now - explosion.startTime;
+                    
+                    // Remove expired explosions
+                    if (elapsed >= explosion.duration) {
+                        this.explosions.splice(i, 1);
+                    }
+                }
+            }
+            
+            explodeBomb(bomb) {
+                if (!this.currentState) return;
+                
+                // SIMPLIFIED APPROACH: Use bomb's current screen position to find terrain location
+                const bombScreenX = bomb.x; // Current screen X position in pixels
+                const bombNCAX = Math.round(bombScreenX / this.pixelScale); // FIXED: Round instead of floor for better accuracy
+                
+                // Find where this screen position maps to in the terrain array
+                const viewStartX = Math.floor(this.worldOffset / this.pixelScale); // Current view start in NCA coordinates
+                const visibleStartX = Math.max(0, viewStartX - this.windowStartX); // Position in visible terrain
+                const terrainX = visibleStartX + bombNCAX; // FIXED: Position in terrain array
+                
+                const explosionNCAX = terrainX + 3; // FIXED: Move 3 pixels to the right
+                const explosionNCAY = this.dinoGroundY; // Explode at ground level
+                
+                console.log(`💥 FIXED EXPLOSION: BombScreen=${bombScreenX.toFixed(1)}px, BombNCA=${bombNCAX}, ViewStart=${viewStartX}, VisibleStart=${visibleStartX}, TerrainX=${terrainX}, WindowStart=${this.windowStartX}, FinalNCA=(${explosionNCAX}, ${explosionNCAY}), VisualAt=(${explosionNCAX}, ${explosionNCAY})`);
+                
+                // Zero out all channels within explosion radius
+                const batch = 0;
+                for (let deltaY = -this.explosionRadius; deltaY <= this.explosionRadius; deltaY++) {
+                    for (let deltaX = -this.explosionRadius; deltaX <= this.explosionRadius; deltaX++) {
+                        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                        if (distance <= this.explosionRadius) {
+                            const targetX = explosionNCAX + deltaX;
+                            const targetY = explosionNCAY + deltaY;
+                            
+                            // Check bounds
+                            if (targetX >= 0 && targetX < this.currentWidth && 
+                                targetY >= 0 && targetY < this.height) {
+                                
+                                // Zero ALL channels (complete terrain destruction!)
+                                for (let channel = 0; channel < this.channels; channel++) {
+                                    this.currentState.set(batch, channel, targetY, targetX, 0.0);
+                                }
+                                
+                                // Track destroyed area for cactus removal using WORLD coordinates
+                                const worldX = this.windowStartX + targetX;
+                                this.destroyedAreas.add(`${worldX},${targetY}`);
+                                
+                                // Debug log terrain destruction
+                                if (deltaX === 0 && deltaY === 0) {
+                                    console.log(`💥 CENTER DESTROYED at NCA (${targetX}, ${targetY})`);
+                                }
+                                
+                            } else {
+                            }
+                        }
+                    }
+                }
+                
+                console.log(`💥 Terrain destroyed in ${this.explosionRadius} NCA pixel radius!`);
+                
+                // Create explosion visual effect using bomb's SCREEN position directly!
+                // Generate random explosion pattern
+                const explosionPixels = [];
+                const numPixels = Math.floor(this.explosionRadius * this.explosionRadius * 4); // Much denser explosion particles!
+                
+                for (let i = 0; i < numPixels; i++) {
+                    // Random position within explosion radius
+                    const angle = Math.random() * 2 * Math.PI;
+                    const distance = Math.random() * this.explosionRadius;
+                    const deltaX = Math.cos(angle) * distance;
+                    const deltaY = Math.sin(angle) * distance;
+                    
+                    // Random color from explosion palette
+                    const colorChoices = [
+                        'red', 'orange', 'yellow', 'black', 'gray'
+                    ];
+                    const baseColor = colorChoices[Math.floor(Math.random() * colorChoices.length)];
+                    
+                    explosionPixels.push({
+                        deltaX: deltaX,
+                        deltaY: deltaY,
+                        baseColor: baseColor,
+                        jitterSeed: Math.random() // For color jitter animation
+                    });
+                }
+                
+                const explosion = {
+                    worldX: bomb.worldX, // Store WORLD coordinates so explosion moves with screen!
+                    screenY: bomb.y, // Y doesn't scroll, so screen Y is fine
+                    pixels: explosionPixels,
+                    startTime: performance.now(),
+                    duration: this.explosionDuration,
+                    active: true
+                };
+                this.explosions.push(explosion);
+            }
+            
+            detectCactusBoundingBoxes() {
+                if (!this.currentState) return;
+                
+                this.cactusBoundingBoxes = [];
+                const viewStartX = Math.floor(this.worldOffset);
+                const visibleStartX = Math.max(0, viewStartX - this.windowStartX);
+                const visibleEndX = Math.min(this.currentWidth, visibleStartX + this.width);
+                
+                const batch = 0;
+                const cactusChannel = 5; // Channel 5 contains cactus data
+                const cactusThreshold = 0.3; // Minimum strength to be considered a cactus
+                
+                // Scan for cactus columns
+                for (let terrainX = visibleStartX; terrainX < visibleEndX; terrainX++) {
+                    let maxCactusStrength = 0;
+                    let cactusPixelCount = 0;
+                    
+                    // Check for cactus in this column (where cacti actually exist: Y 12-25)
+                    // Skip if area was destroyed by explosion
+                    let hasUndestoyedCactus = false;
+                    const minY = 12; // Start scanning from Y=12 (where cacti start)
+                    const maxY = 25; // Stop scanning at Y=25 (jumping height range)
+                    
+                    for (let y = minY; y <= maxY; y++) {
+                        // Check if this position was destroyed (using world coordinates)
+                        const worldX = this.windowStartX + terrainX;
+                        if (this.destroyedAreas.has(`${worldX},${y}`)) {
+                            continue; // Skip destroyed areas
+                        }
+                        
+                        const cactusValue = this.currentState.get(batch, cactusChannel, y, terrainX);
+                        if (cactusValue > cactusThreshold) {
+                            maxCactusStrength = Math.max(maxCactusStrength, cactusValue);
+                            cactusPixelCount++; // Count cactus pixels
+                            hasUndestoyedCactus = true;
+                        }
+                    }
+                    
+                    // Only create bounding box if we have enough cactus pixels (minimum density)
+                    const minCactusPixels = 10;
+                    if (maxCactusStrength > cactusThreshold && cactusPixelCount >= minCactusPixels && hasUndestoyedCactus) {
+                        const viewX = terrainX - visibleStartX;
+                        // Shift X position by 5 NCA pixels to the right
+                        const cactusPixelX = (viewX + 7) * this.pixelScale;
+                        const cactusPixelWidth = this.pixelScale;
+                        
+                        // Calculate bounding box height based on scanning range (Y 12-25)
+                        const scanRangeHeight = maxY - minY + 1; // 14 pixels (Y 12-25 inclusive)
+                        const cactusPixelHeight = scanRangeHeight * this.pixelScale; // Full scan range height
+                        
+                        // Position bounding box to cover the scan range (Y 12-25)
+                        // Calculate position based on actual scan range
+                        const groundPixelY = this.canvas.height - ((this.height - 1 - this.dinoGroundY) * this.pixelScale);
+                        const scanRangeTopFromGround = (this.dinoGroundY - minY) * this.pixelScale; // Distance from ground to scan top
+                        const cactusPixelY = groundPixelY - scanRangeTopFromGround;
+                        
+                        this.cactusBoundingBoxes.push({
+                            x: cactusPixelX,
+                            y: cactusPixelY,
+                            width: cactusPixelWidth,
+                            height: cactusPixelHeight,
+                            strength: maxCactusStrength,
+                            type: 'cactus',
+                            terrainX: terrainX
+                        });
+                        
+                    }
+                }
+            }
+            
+            checkCollisions() {
+                if (!this.dinoBoundingBoxes.length || this.isGameOver) return false;
+                
+                // Check collision for both dino bounding boxes (head and body)
+                for (const dinoBox of this.dinoBoundingBoxes) {
+                    // Convert dino bounding box to canvas-relative coordinates for collision detection
+                    const dinoCanvasBox = {
+                        x: dinoBox.x,
+                        y: dinoBox.y - (this.gameHeight - this.canvas.height),
+                        width: dinoBox.width,
+                        height: dinoBox.height
+                    };
+                    
+                    for (const cactus of this.cactusBoundingBoxes) {
+                        if (this.boundingBoxesCollide(dinoCanvasBox, cactus)) {
+                            console.log(`💥 COLLISION DETECTED! ${dinoBox.type}`, dinoCanvasBox, cactus);
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            boundingBoxesCollide(box1, box2) {
+                return (
+                    box1.x < box2.x + box2.width &&
+                    box1.x + box1.width > box2.x &&
+                    box1.y < box2.y + box2.height &&
+                    box1.y + box1.height > box2.y
+                );
+            }
+            
+            gameOver() {
+                this.isGameOver = true;
+                this.gameState = 'GAME_OVER';
+                this.dinoCharacter.src = this.dinoSprites.dead;
+                console.log(`🦕💀 Setting dino to dead sprite: ${this.dinoSprites.dead}`);
+                
+                // Show Game Over image if loaded
+                if (this.gameOverImageLoaded) {
+                    this.gameOverDisplay.innerHTML = `<img src="/dino_assets/GameOver.png" alt="Game Over" style="image-rendering: pixelated;">`;
+                    this.gameOverDisplay.style.display = 'block';
+                } else {
+                    // Fallback text
+                    this.gameOverDisplay.innerHTML = '<div style="font-family: Courier New; font-size: 24px; font-weight: bold; color: #333;">GAME OVER</div>';
+                    this.gameOverDisplay.style.display = 'block';
+                }
+                
+                // Show restart instruction below game over
+                this.gameTitle.style.display = 'block';
+                this.gameTitle.style.top = '55%';
+                this.gameTitle.textContent = 'Press <space> to restart';
+                
+                console.log(`🦕💀 Game Over! Final Score: ${this.score}`);
+            }
+            
+            updateMemoryStats() {
+                const now = performance.now();
+                
+                // Update memory stats every 1000ms to avoid performance impact
+                if (now - this.memoryStats.lastUpdate < 1000) return;
+                this.memoryStats.lastUpdate = now;
+                
+                // Check if performance.memory is available (Chrome/Edge)
+                if (performance.memory) {
+                    this.memoryStats.usedJSHeapSize = performance.memory.usedJSHeapSize;
+                    this.memoryStats.totalJSHeapSize = performance.memory.totalJSHeapSize;
+                    this.memoryStats.jsHeapSize = performance.memory.jsHeapSizeLimit;
+                }
+                
+                // Calculate tensor memory usage
+                this.memoryStats.tensorMemory = this.calculateTensorMemory();
+            }
+            
+            calculateTensorMemory() {
+                let totalBytes = 0;
+                
+                // Current state tensor
+                if (this.currentState) {
+                    // Float32Array: 4 bytes per element
+                    totalBytes += this.currentState.data.length * 4;
+                }
+                
+                // Estimate additional tensor memory (fire masks, temporary tensors, etc.)
+                // Each inference step creates temporary tensors
+                const inferenceMemory = this.modelWidth * this.height * 4 * 3; // ~3 temporary tensors
+                totalBytes += inferenceMemory;
+                
+                return totalBytes;
+            }
+            
+            drawDebugBoundingBoxes() {
+                if (!this.showDebugBoxes) return;
+                
+                // Draw both dino bounding boxes (head and body)
+                for (const dinoBox of this.dinoBoundingBoxes) {
+                    const dinoCanvasX = dinoBox.x;
+                    const dinoCanvasY = dinoBox.y - (this.gameHeight - this.canvas.height);
+                    
+                    // Different colors for head vs body
+                    this.ctx.strokeStyle = dinoBox.type === 'dino-head' ? '#00FF00' : '#0088FF'; // Green for head, blue for body
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(
+                        dinoCanvasX,
+                        dinoCanvasY,
+                        dinoBox.width,
+                        dinoBox.height
+                    );
+                    
+                    // Label
+                    this.ctx.fillStyle = dinoBox.type === 'dino-head' ? '#00FF00' : '#0088FF';
+                    this.ctx.font = '10px Arial';
+                    this.ctx.fillText(
+                        dinoBox.type === 'dino-head' ? 'HEAD' : 'BODY',
+                        dinoCanvasX,
+                        dinoCanvasY - 5
+                    );
+                }
+                
+                // Draw cactus bounding boxes in red
+                this.ctx.strokeStyle = '#FF0000'; // Bright red
+                this.ctx.lineWidth = 2;
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.font = '10px Arial';
+                
+                for (const cactus of this.cactusBoundingBoxes) {
+                    this.ctx.strokeRect(
+                        cactus.x,
+                        cactus.y,
+                        cactus.width,
+                        cactus.height
+                    );
+                    
+                    // Label with strength
+                    this.ctx.fillText(
+                        `C:${cactus.strength.toFixed(1)}`,
+                        cactus.x,
+                        cactus.y - 5
+                    );
+                }
+            }
+            
+            drawBombs() {
+                // Draw all active bombs
+                for (const bomb of this.bombs) {
+                    if (!bomb.active) continue;
+                    
+                    // Use bomb's screen coordinates directly (they're already in screen space)
+                    const screenX = bomb.x;
+                    const screenY = bomb.y;
+                    
+                    // Only draw if on screen
+                    if (screenX >= -20 && screenX <= this.gameWidth + 20 && 
+                        screenY >= -20 && screenY <= this.gameHeight + 20) {
+                        
+                        // Convert to canvas coordinates (bombs are in game area coordinates)
+                        const canvasX = screenX;
+                        const canvasY = screenY - (this.gameHeight - this.canvas.height);
+                        
+                        // Draw bomb as emoji 💣 (50% larger!)
+                        this.ctx.font = '24px Arial';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        this.ctx.fillText('💣', canvasX, canvasY);
+                        
+                        // Debug info if debug boxes are enabled
+                        if (this.showDebugBoxes) {
+                            this.ctx.fillStyle = '#000000';
+                            this.ctx.font = '10px Arial';
+                            this.ctx.textAlign = 'center';
+                            this.ctx.fillText(
+                                `(${bomb.worldX.toFixed(0)})`,
+                                canvasX,
+                                canvasY - 15
+                            );
+                        }
+                    }
+                }
+            }
+            
+            drawExplosions() {
+                // Draw all active explosions as random scattered pixels
+                for (const explosion of this.explosions) {
+                    if (!explosion.active) continue;
+                    
+                    const now = performance.now();
+                    const elapsed = now - explosion.startTime;
+                    const progress = elapsed / explosion.duration; // 0 to 1
+                    
+                    // Convert world coordinates to current screen position - explosion moves with terrain!
+                    const explosionScreenX = (explosion.worldX * this.pixelScale) - this.worldOffset;
+                    const explosionScreenY = explosion.screenY;
+                    
+                    // Only draw if explosion center is somewhat visible
+                    if (explosionScreenX >= -100 && explosionScreenX <= this.gameWidth + 100 && 
+                        explosionScreenY >= -100 && explosionScreenY <= this.gameHeight + 100) {
+                        
+                        // Convert to canvas coordinates
+                        const canvasX = explosionScreenX;
+                        const canvasY = explosionScreenY - (this.gameHeight - this.canvas.height);
+                        
+                        // Draw each random pixel
+                        for (const pixel of explosion.pixels) {
+                            // Apply pixel offset IN SCREEN COORDINATES (not NCA!)
+                            const pixelCanvasX = canvasX + (pixel.deltaX * this.pixelScale);
+                            const pixelCanvasY = canvasY + (pixel.deltaY * this.pixelScale);
+                            
+                            // Skip if pixel is off canvas
+                            if (pixelCanvasX < -this.pixelScale || pixelCanvasX > this.canvas.width + this.pixelScale || 
+                                pixelCanvasY < -this.pixelScale || pixelCanvasY > this.canvas.height + this.pixelScale) continue;
+                            
+                            // Calculate color with jitter animation
+                            const opacity = Math.max(0, 1 - progress); // Fade out over time
+                            const jitter = Math.sin((elapsed + pixel.jitterSeed * 1000) * 0.01) * 0.3; // Color jitter
+                            
+                            let color;
+                            switch (pixel.baseColor) {
+                                case 'red':
+                                    const redJitter = 255 + jitter * 100;
+                                    color = `rgba(${Math.max(150, Math.min(255, redJitter))}, 0, 0, ${opacity})`;
+                                    break;
+                                case 'orange':
+                                    const orangeR = 255 + jitter * 50;
+                                    const orangeG = 100 + jitter * 100;
+                                    color = `rgba(${Math.max(200, Math.min(255, orangeR))}, ${Math.max(50, Math.min(200, orangeG))}, 0, ${opacity})`;
+                                    break;
+                                case 'yellow':
+                                    const yellowIntensity = 255 + jitter * 100;
+                                    color = `rgba(${Math.max(200, Math.min(255, yellowIntensity))}, ${Math.max(200, Math.min(255, yellowIntensity))}, 0, ${opacity})`;
+                                    break;
+                                case 'black':
+                                    const blackIntensity = 50 + jitter * 50;
+                                    color = `rgba(${Math.max(0, Math.min(100, blackIntensity))}, ${Math.max(0, Math.min(100, blackIntensity))}, ${Math.max(0, Math.min(100, blackIntensity))}, ${opacity})`;
+                                    break;
+                                case 'gray':
+                                    const grayIntensity = 128 + jitter * 100;
+                                    const grayValue = Math.max(80, Math.min(200, grayIntensity));
+                                    color = `rgba(${grayValue}, ${grayValue}, ${grayValue}, ${opacity * 0.8})`;
+                                    break;
+                            }
+                            
+                            this.ctx.fillStyle = color;
+                            this.ctx.fillRect(pixelCanvasX, pixelCanvasY, this.pixelScale, this.pixelScale);
+                        }
+                    }
+                }
+            }
+            
+            updateClouds(deltaTime) {
+                // Move existing clouds
+                for (let i = this.clouds.length - 1; i >= 0; i--) {
+                    const cloud = this.clouds[i];
+                    cloud.x -= cloud.speed * deltaTime; // Move clouds left with their speed
+                    
+                    // Remove clouds that have moved off screen
+                    if (cloud.x + cloud.width < 0) {
+                        this.clouds.splice(i, 1);
+                    }
+                }
+                
+                // Spawn new clouds
+                if (this.clouds.length < this.maxClouds && Math.random() < this.cloudSpawnChance) {
+                    this.spawnCloud();
+                }
+            }
+            
+            spawnCloud() {
+                // Sky area is from 0 to (gameHeight - canvas.height)
+                const skyHeight = this.gameHeight - this.canvas.height;
+                
+                // Use the actual image aspect ratio
+                const naturalAspectRatio = this.cloudImage.height / this.cloudImage.width;
+                
+                // Base cloud size that maintains the actual image proportions
+                const baseWidth = 65 + Math.random() * 20; // 80-140px width
+                const baseHeight = baseWidth * naturalAspectRatio; // Use actual image ratio
+                
+                const cloud = {
+                    x: this.gameWidth + 50, // Start off-screen to the right
+                    y: Math.max(5, Math.min(skyHeight - 55, Math.random() * (skyHeight - 15) + 5)), // Allow clouds to go lower in sky area
+                    width: baseWidth,
+                    height: baseHeight,
+                    speed: 20 + Math.random() * 30, // Random speed 20-50 px/s
+                    opacity: 0.9 + Math.random() * 0.2
+                };
+                this.clouds.push(cloud);
+            }
+            
+            renderGameAreaOverlay() {
+                // Create overlay canvas if it doesn't exist
+                if (!this.overlayCanvas) {
+                    this.overlayCanvas = document.createElement('canvas');
+                    this.overlayCanvas.width = this.gameWidth;
+                    this.overlayCanvas.height = this.gameHeight;
+                    this.overlayCanvas.style.position = 'absolute';
+                    this.overlayCanvas.style.top = '0';
+                    this.overlayCanvas.style.left = '0';
+                    this.overlayCanvas.style.pointerEvents = 'none';
+                    this.overlayCanvas.style.zIndex = '10';
+                    this.gameArea.appendChild(this.overlayCanvas);
+                    this.overlayCtx = this.overlayCanvas.getContext('2d');
+                }
+                
+                // Clear overlay
+                this.overlayCtx.clearRect(0, 0, this.gameWidth, this.gameHeight);
+                
+                // Draw clouds
+                this.drawClouds();
+                
+                // Draw bombs
+                this.drawBombsOverlay();
+            }
+            
+            drawClouds() {
+                // Draw all clouds with Cloud.png image
+                if (!this.cloudImageLoaded) return; // Wait for image to load
+                
+                for (const cloud of this.clouds) {
+                    this.overlayCtx.globalAlpha = cloud.opacity;
+                    this.overlayCtx.drawImage(
+                        this.cloudImage,
+                        cloud.x,
+                        cloud.y,
+                        cloud.width,
+                        cloud.height
+                    );
+                }
+                this.overlayCtx.globalAlpha = 1.0; // Reset opacity
+            }
+            
+            drawBombsOverlay() {
+                // Draw all active bombs on the overlay (above NCA canvas)
+                for (const bomb of this.bombs) {
+                    if (!bomb.active) continue;
+                    
+                    const screenX = bomb.x;
+                    const screenY = bomb.y;
+                    
+                    // Only draw if on screen
+                    if (screenX >= -20 && screenX <= this.gameWidth + 20 && 
+                        screenY >= -20 && screenY <= this.gameHeight + 20) {
+                        
+                        // Draw bomb as emoji 💣
+                        this.overlayCtx.font = '24px Arial';
+                        this.overlayCtx.textAlign = 'center';
+                        this.overlayCtx.textBaseline = 'middle';
+                        this.overlayCtx.fillText('💣', screenX, screenY);
+                        
+                        // Debug info if debug boxes are enabled
+                        if (this.showDebugBoxes) {
+                            this.overlayCtx.fillStyle = '#000000';
+                            this.overlayCtx.font = '10px Arial';
+                            this.overlayCtx.textAlign = 'center';
+                            this.overlayCtx.fillText(
+                                `(${bomb.worldX.toFixed(0)})`,
+                                screenX,
+                                screenY - 15
+                            );
+                        }
+                    }
+                }
+            }
+            
+            async loadModel() {
+                try {
+                    console.log(`Loading ${this.selectedModelSize}px NCA model...`);
+                    
+                    // Check if ONNX Runtime loaded properly
+                    if (!window.ort || !ort.InferenceSession) {
+                        throw new Error('ONNX Runtime failed to load. This may be a Safari mobile compatibility issue.');
+                    }
+                    
+                    console.log('Initializing ONNX Runtime...');
+                    
+                    // Force environment initialization  
+                    try {
+                        if (ort.env && typeof ort.env.wasm === 'object') {
+                            // Only set WASM paths, keep performance settings at defaults
+                            ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
+                        }
+                    } catch (configError) {
+                        console.warn('ONNX configuration warning:', configError);
+                    }
+                    
+                    // Wait a moment for ONNX to fully initialize
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    // Simple backend fallback order
+                    const backendConfigs = [
+                        { name: 'WebAssembly', providers: ['wasm'] },
+                        { name: 'CPU', providers: ['cpu'] },
+                        { name: 'Auto', providers: [] }
+                    ];
+                    
+                    let sessionCreated = false;
+                    let lastError = null;
+                    
+                    for (const config of backendConfigs) {
+                        try {
+                            console.log(`🧪 Trying backend: ${config.name}`, config.providers);
+                            
+                            const sessionOptions = config.providers.length > 0 ? {
+                                executionProviders: config.providers
+                            } : {}; // No providers = auto selection
+                            
+                            const modelUrl = `/nca_model_${this.selectedModelSize}px.onnx?t=${Date.now()}`;
+                            this.session = await ort.InferenceSession.create(modelUrl, sessionOptions);
+                            
+                            // Store successful backend info
+                            this.backendInfo.name = config.name;
+                            this.backendInfo.providers = this.session.getExecutionProviders?.() || config.providers || ['Unknown'];
+                            
+                            console.log(`✅ Successfully loaded with: ${config.name}`);
+                            sessionCreated = true;
+                            break;
+                            
+                        } catch (error) {
+                            console.warn(`❌ Failed with ${config.name}:`, error.message);
+                            lastError = error;
+                            continue;
+                        }
+                    }
+                    
+                    if (!sessionCreated) {
+                        throw lastError || new Error('All backend configurations failed');
+                    }
+                    
+                    this.createInitialState();
+                    this.renderState();
+                    
+                    console.log('✅ Model loaded! Ready to start the enhanced dino adventure.');
+                    
+                    // Log initial memory usage
+                    this.updateMemoryStats();
+                    console.log('🧠 Initial memory after model load:');
+                    if (performance.memory) {
+                        console.log(`  JS Heap Used: ${(performance.memory.usedJSHeapSize / (1024*1024)).toFixed(1)} MB`);
+                        console.log(`  JS Heap Total: ${(performance.memory.totalJSHeapSize / (1024*1024)).toFixed(1)} MB`);
+                        console.log(`  JS Heap Limit: ${(performance.memory.jsHeapSizeLimit / (1024*1024)).toFixed(1)} MB`);
+                    }
+                    console.log(`  Tensor Memory: ${(this.memoryStats.tensorMemory / (1024*1024)).toFixed(1)} MB`);
+                    
+                    // Auto-start the game after loading
+                    setTimeout(() => this.startGame(), 100);
+                    
+                } catch (error) {
+                    console.error('❌ All backend attempts failed. Final error:', error);
+                    alert(`Failed to load model: ${error.message}`);
+                }
+            }
+            
+            createInitialState() {
+                // Create native ONNX tensor - start with model width for compatibility
+                const stateData = new Float32Array(this.channels * this.height * this.modelWidth);
+                this.currentState = new ort.Tensor('float32', stateData, [1, this.channels, this.height, this.modelWidth]);
+                
+                this.currentState.fill(0.0);
+                
+                // Add seed at bottom rows
+                const batch = 0;
+                const alphaChannel = 3;
+                const seedRows = [this.height-1, this.height-2, this.height-3, this.height-4, this.height-5];
+                
+                for (const row of seedRows) {
+                    this.currentState.set(batch, alphaChannel, row, 0, 1.0);
+                    
+                    for (let c = 4; c < this.channels; c++) {
+                        this.currentState.set(batch, c, row, 0, 1.0);
+                    }
+                }
+                
+                // No initial cactus patterns - let them generate procedurally
+                
+                this.currentWidth = this.modelWidth;
+                this.windowStartX = 0;
+                this.worldOffset = 0;
+                
+                // Reset counters
+                this.extensionCount = 0;
+                this.trimCount = 0;
+                this.totalSteps = 0;
+                this.stepTimes = [];
+                
+                // Reset speed controller
+                this.currentScrollSpeed = 0;
+                this.speedController.integral = 0;
+                this.speedController.lastError = 0;
+            }
+            
+            addCactusPattern(startX, pattern) {
+                const batch = 0;
+                const cactusChannel = 5;
+                const skipTopRows = 12; // Don't place cacti in top 12 rows
+                
+                for (let p = 0; p < pattern.length && startX + p < this.currentWidth; p++) {
+                    const x = startX + p;
+                    const strength = pattern[p];
+                    // Only set cactus values below the top 12 rows
+                    for (let y = skipTopRows; y < this.height; y++) {
+                        this.currentState.set(batch, cactusChannel, y, x, strength);
+                    }
+                }
+            }
+            
+            addCactusSeeds(startX, endX) {
+                const cactusSpawnChance = 0.01;
+                const cactusPattern = [0.1, 0.2, 0.35, 0.5, 1, 1, 1, 1];
+                const batch = 0;
+                const cactusChannel = 5;
+                const skipTopRows = 12; // Don't place cacti in top 12 rows
+                
+                for (let x = startX; x < endX; x++) {
+                    if (Math.random() < cactusSpawnChance) {
+                        if (x + cactusPattern.length <= endX) {
+                            for (let p = 0; p < cactusPattern.length; p++) {
+                                const patternX = x + p;
+                                const strength = cactusPattern[p];
+                                // Only set cactus values below the top 12 rows
+                                for (let y = skipTopRows; y < this.height; y++) {
+                                    this.currentState.set(batch, cactusChannel, y, patternX, strength);
+                                }
+                            }
+                            x += cactusPattern.length - 1;
+                        }
+                    }
+                }
+            }
+            
+            findActualGenerationEdge() {
+                if (!this.currentState) return 0;
+                
+                let rightmostX = 0;
+                const batch = 0;
+                const alphaChannel = 3;
+                
+                for (let x = this.currentWidth - 1; x >= 0; x--) {
+                    for (let y = 0; y < this.height; y++) {
+                        const alpha = this.currentState.get(batch, alphaChannel, y, x);
+                        
+                        if (alpha > 0.1) {
+                            rightmostX = Math.max(rightmostX, x + 1);
+                            break;
+                        }
+                    }
+                    
+                    if (rightmostX > 0 && x < rightmostX - 10) {
+                        break;
+                    }
+                }
+                
+                return this.windowStartX + rightmostX;
+            }
+
+            calculateSynchronizedGeneration() {
+                const actualGenerationEdge = this.findActualGenerationEdge();
+                const viewStartX = Math.floor(this.worldOffset);
+                const edgeScreenPosition = actualGenerationEdge - viewStartX;
+                const edgeScreenPercent = edgeScreenPosition / this.width;
+                const targetScreenPosition = this.width * this.generationTargetPercent;
+                const targetScreenPercent = this.generationTargetPercent;
+                const screenPositionError = edgeScreenPosition - targetScreenPosition;
+                const percentError = edgeScreenPercent - targetScreenPercent;
+                
+                return {
+                    viewStartX,
+                    actualGenerationEdge,
+                    edgeScreenPosition,
+                    edgeScreenPercent,
+                    targetScreenPosition,
+                    targetScreenPercent,
+                    screenPositionError,
+                    percentError
+                };
+            }
+            
+            updateDynamicScrollSpeed(sync, deltaTime) {
+                const error = sync.percentError;
+                this.speedController.integral += error * deltaTime;
+                const derivative = (error - this.speedController.lastError) / deltaTime;
+                
+                const pidOutput = (
+                    this.speedController.kP * error +
+                    this.speedController.kI * this.speedController.integral +
+                    this.speedController.kD * derivative
+                );
+                
+                this.currentScrollSpeed = this.baseScrollSpeed + pidOutput;
+                this.currentScrollSpeed = Math.max(
+                    this.speedController.minSpeed,
+                    Math.min(this.speedController.maxSpeed, this.currentScrollSpeed)
+                );
+                
+                this.speedController.lastError = error;
+                
+                // Adjust emergency thresholds based on model size
+                const isCompactMode = this.selectedModelSize === 128;
+                const emergencySlowThreshold = isCompactMode ? 0.95 : 0.9; // Higher threshold for compact
+                const emergencyFastThreshold = isCompactMode ? 0.7 : 0.5;   // Adjusted for compact
+                
+                if (sync.edgeScreenPercent < emergencyFastThreshold) {
+                    this.currentScrollSpeed = Math.min(this.currentScrollSpeed * 1.5, this.speedController.maxSpeed);
+                }
+                
+                if (sync.edgeScreenPercent > emergencySlowThreshold) {
+                    this.currentScrollSpeed = Math.max(this.currentScrollSpeed * 0.3, this.speedController.minSpeed);
+                }
+                
+                // Debug logging for compact mode issues
+                if (isCompactMode && (sync.edgeScreenPercent > 1.0 || sync.edgeScreenPercent < 0.6)) {
+                    console.warn(`🚨 Compact mode sync issue: edge at ${(sync.edgeScreenPercent * 100).toFixed(1)}%, target ${(this.generationTargetPercent * 100)}%, speed ${this.currentScrollSpeed.toFixed(1)}`);
+                }
+            }
+
+            async runSynchronizedStep() {
+                if (!this.session || !this.currentState) return false;
+                
+                const stepStart = performance.now();
+                const sync = this.calculateSynchronizedGeneration();
+                
+                // Terrain management
+                const generationEdgeX = sync.actualGenerationEdge;
+                const terrainStartX = this.windowStartX;
+                const generationProgress = (generationEdgeX - terrainStartX) / this.currentWidth;
+                
+                if (generationProgress > 0.75 && this.currentWidth < this.width * 3) {
+                    const extensionAmount = 64;
+                    const newWidth = this.currentWidth + extensionAmount;
+                    
+                    if (newWidth <= this.width * 3) {
+                        const newState = this.currentState.resize(newWidth);
+                        const oldWidth = this.currentWidth;
+                        this.currentState = newState;
+                        this.currentWidth = newWidth;
+                        this.addCactusSeeds(oldWidth, newWidth);
+                        this.extensionCount++;
+                    }
+                }
+                
+                // Trim terrain
+                const offScreenLeft = sync.viewStartX - this.windowStartX;
+                if (offScreenLeft >= 16) {
+                    const trimAmount = offScreenLeft;
+                    const newState = this.currentState.trimLeft(trimAmount);
+                    this.currentState = newState;
+                    this.currentWidth = this.currentState.dims[3];
+                    this.windowStartX += trimAmount;
+                    this.trimCount++;
+                }
+                
+                // NCA inference
+                const fireMaskData = new Float32Array(this.height * this.modelWidth);
+                for (let i = 0; i < fireMaskData.length; i++) {
+                    fireMaskData[i] = Math.random() < this.fireRate ? 1.0 : 0.0;
+                }
+                const fireMask = new ort.Tensor('float32', fireMaskData, [1, 1, this.height, this.modelWidth]);
+                
+                let inferenceState = this.currentState;
+                let inferenceMask = fireMask;
+                let inferenceWindowStart = 0;
+                
+                if (this.currentWidth > this.modelWidth) {
+                    const generationEdgeInTerrain = sync.actualGenerationEdge - this.windowStartX;
+                    inferenceWindowStart = Math.max(0, Math.min(
+                        this.currentWidth - this.modelWidth,
+                        Math.floor(generationEdgeInTerrain - this.modelWidth * 0.6)
+                    ));
+                    
+                    const paddedStateData = new Float32Array(this.channels * this.height * this.modelWidth);
+                    const paddedMaskData = new Float32Array(this.height * this.modelWidth);
+                    
+                    inferenceState = new ort.Tensor('float32', paddedStateData, [1, this.channels, this.height, this.modelWidth]);
+                    inferenceMask = new ort.Tensor('float32', paddedMaskData, [1, 1, this.height, this.modelWidth]);
+                    
+                    const batch = 0;
+                    const copyWidth = Math.min(this.modelWidth, this.currentWidth - inferenceWindowStart);
+                    
+                    for (let c = 0; c < this.channels; c++) {
+                        for (let y = 0; y < this.height; y++) {
+                            for (let x = 0; x < copyWidth; x++) {
+                                const value = this.currentState.get(batch, c, y, inferenceWindowStart + x);
+                                inferenceState.set(batch, c, y, x, value);
+                            }
+                        }
+                    }
+                    
+                    for (let y = 0; y < this.height; y++) {
+                        for (let x = 0; x < copyWidth; x++) {
+                            const fireValue = Math.random() < this.fireRate ? 1.0 : 0.0;
+                            inferenceMask.set(batch, 0, y, x, fireValue);
+                        }
+                    }
+                } else if (this.currentWidth < this.modelWidth) {
+                    // Current terrain is smaller than model, pad it
+                    const paddedStateData = new Float32Array(this.channels * this.height * this.modelWidth);
+                    const paddedMaskData = new Float32Array(this.height * this.modelWidth);
+                    
+                    inferenceState = new ort.Tensor('float32', paddedStateData, [1, this.channels, this.height, this.modelWidth]);
+                    inferenceMask = new ort.Tensor('float32', paddedMaskData, [1, 1, this.height, this.modelWidth]);
+                    
+                    const batch = 0;
+                    
+                    for (let c = 0; c < this.channels; c++) {
+                        for (let y = 0; y < this.height; y++) {
+                            for (let x = 0; x < this.currentWidth; x++) {
+                                const value = this.currentState.get(batch, c, y, x);
+                                inferenceState.set(batch, c, y, x, value);
+                            }
+                        }
+                    }
+                    
+                    // Copy fire mask
+                    for (let y = 0; y < this.height; y++) {
+                        for (let x = 0; x < this.currentWidth; x++) {
+                            const fireValue = Math.random() < this.fireRate ? 1.0 : 0.0;
+                            inferenceMask.set(batch, 0, y, x, fireValue);
+                        }
+                    }
+                }
+                
+                const feeds = { nca_state: inferenceState, fire_mask: inferenceMask };
+                const results = await this.session.run(feeds);
+                
+                if (!results.next_nca_state || !results.next_nca_state.data) {
+                    console.error('Invalid ONNX results');
+                    return false;
+                }
+                
+                // Copy results back
+                if (this.currentWidth === this.modelWidth) {
+                    this.currentState.copyFrom(results.next_nca_state);
+                } else if (this.currentWidth > this.modelWidth) {
+                    const batch = 0;
+                    const copyWidth = Math.min(this.modelWidth, this.currentWidth - inferenceWindowStart);
+                    
+                    for (let c = 0; c < this.channels; c++) {
+                        for (let y = 0; y < this.height; y++) {
+                            for (let x = 0; x < copyWidth; x++) {
+                                const value = results.next_nca_state.get(batch, c, y, x);
+                                this.currentState.set(batch, c, y, inferenceWindowStart + x, value);
+                            }
+                        }
+                    }
+                } else {
+                    // Small terrain case: copy from padded inference back to smaller terrain
+                    const batch = 0;
+                    const copyWidth = Math.min(this.currentWidth, this.modelWidth);
+                    
+                    for (let c = 0; c < this.channels; c++) {
+                        for (let y = 0; y < this.height; y++) {
+                            for (let x = 0; x < copyWidth; x++) {
+                                const value = results.next_nca_state.get(batch, c, y, x);
+                                this.currentState.set(batch, c, y, x, value);
+                            }
+                        }
+                    }
+                }
+                
+                const stepTime = performance.now() - stepStart;
+                this.stepTimes.push(stepTime);
+                if (this.stepTimes.length > 100) this.stepTimes.shift();
+                this.totalSteps++;
+                
+                return true;
+            }
+            
+            renderState() {
+                if (!this.currentState) return;
+                
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                const viewStartX = Math.floor(this.worldOffset);
+                const visibleStartX = Math.max(0, viewStartX - this.windowStartX);
+                const visibleEndX = Math.min(this.currentWidth, visibleStartX + this.width);
+                
+                const batch = 0;
+                for (let y = 0; y < this.height; y++) {
+                    for (let terrainX = visibleStartX; terrainX < visibleEndX; terrainX++) {
+                        const viewX = terrainX - visibleStartX;
+                        
+                        const alpha = this.currentState.get(batch, 3, y, terrainX);
+                        
+                        if (alpha > 0.1) {
+                            const r = Math.floor(Math.max(0, Math.min(255, this.currentState.get(batch, 0, y, terrainX) * 255)));
+                            const g = Math.floor(Math.max(0, Math.min(255, this.currentState.get(batch, 1, y, terrainX) * 255)));
+                            const b = Math.floor(Math.max(0, Math.min(255, this.currentState.get(batch, 2, y, terrainX) * 255)));
+                            
+                            if (r > 10 || g > 10 || b > 10) {
+                                this.ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                                this.ctx.fillRect(
+                                    viewX * this.pixelScale, 
+                                    y * this.pixelScale, 
+                                    this.pixelScale, 
+                                    this.pixelScale
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                // Draw explosions on NCA canvas
+                this.drawExplosions();
+                
+                // Detect cactus bounding boxes and draw debug visualization
+                this.detectCactusBoundingBoxes();
+                this.drawDebugBoundingBoxes();
+            }
+            
+            updateUI() {
+                const sync = this.calculateSynchronizedGeneration();
+                const avgStepTime = this.stepTimes.length > 0 ? 
+                    this.stepTimes.reduce((a, b) => a + b, 0) / this.stepTimes.length : 0;
+                const actualNCASpeed = avgStepTime > 0 ? 1000 / avgStepTime : 0;
+                
+                // Update memory stats
+                this.updateMemoryStats();
+                
+                // Format debug output
+                const formatMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+                
+                let debugText = `Dino Position: 15%
+Dino Status: ${this.dinoIsJumping ? 'Jumping' : 'Running'}
+Dino Height: ${this.dinoIsJumping ? `+${(this.dinoGroundY - this.dinoY).toFixed(0)} cells` : 'On Ground'}
+World Position: ${Math.floor(this.worldOffset)}
+Scroll Speed: ${this.currentScrollSpeed.toFixed(1)} px/s
+EMA Speed: ${this.scrollSpeedEMA.toFixed(1)} px/s
+Generation Edge: ${Math.floor(sync.actualGenerationEdge)}
+NCA Speed: ${actualNCASpeed.toFixed(1)} steps/s
+Step Time: ${avgStepTime.toFixed(2)}ms
+Total Steps: ${this.totalSteps}
+Terrain Width: ${this.currentWidth}
+Extensions: ${this.extensionCount}
+Trims: ${this.trimCount}
+Score: ${this.score}`;
+                
+                if (performance.memory) {
+                    debugText += `
+JS Heap: ${formatMB(this.memoryStats.usedJSHeapSize)} MB / ${formatMB(this.memoryStats.totalJSHeapSize)} MB`;
+                }
+                
+                debugText += `
+Tensor Memory: ${formatMB(this.memoryStats.tensorMemory)} MB
+Backend: ${this.backendInfo.name}
+Providers: ${this.backendInfo.providers.join(', ')}`;
+                
+                this.debugWindow.textContent = debugText;
+            }
+            
+            async startGame() {
+                if (this.isRunning) return;
+                
+                // Start intro sequence
+                this.gameState = 'INTRO';
+                this.isRunning = true;
+                
+                // Show title and dino during intro
+                this.gameTitle.style.display = 'block';
+                this.gameTitle.textContent = 'Dino in NCA-land';
+                this.dinoCharacter.style.display = 'block';
+                
+                console.log('🦕 Watch the NCA world generate...');
+                
+                const runLoop = async () => {
+                    if (!this.isRunning) return;
+                    
+                    const now = performance.now();
+                    const deltaTime = (now - this.lastUpdateTime) / 1000;
+                    this.lastUpdateTime = now;
+                    
+                    const sync = this.calculateSynchronizedGeneration();
+                    
+                    // Handle different game states
+                    if (this.gameState === 'INTRO') {
+                        // During intro, only generation happens - no scrolling
+                        // Check if generation reached the edge
+                        if (sync.actualGenerationEdge >= (this.width * this.generationTargetPercent)) {
+                            this.gameState = 'WAITING';
+                            this.gameTitle.textContent = 'Press <space> to jump';
+                            console.log('🦕 Ready to play! Press SPACEBAR to start jumping!');
+                            console.log('🎮 Transitioned to WAITING state');
+                        }
+                    } else if (this.gameState === 'WAITING') {
+                        // Wait for spacebar press - no movement
+                    } else if (this.gameState === 'PLAYING') {
+                        // Normal gameplay - scrolling and physics
+                        this.updateDynamicScrollSpeed(sync, deltaTime);
+                        this.worldOffset += this.currentScrollSpeed * deltaTime;
+                        
+                        // Show bomb tutorial after 5 seconds
+                        if (!this.bombTutorialShown && Date.now() - this.gameStartTime > 5000) {
+                            this.showBombTutorial();
+                        }
+                    } else if (this.gameState === 'GAME_OVER') {
+                        // Game over - wait for restart input, no updates
+                    }
+                    
+                    // Update score only during PLAYING state
+                    if (this.gameState === 'PLAYING') {
+                        this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
+                        this.scoreDisplay.textContent = this.score.toString().padStart(5, '0'); // Show score with leading zeros
+                    }
+                    
+                    // Update EMA of scroll speed for stable jump mechanics
+                    const oldEMA = this.scrollSpeedEMA;
+                    this.scrollSpeedEMA = this.scrollSpeedEMA * (1 - this.scrollSpeedEMAAlpha) + 
+                                         this.currentScrollSpeed * this.scrollSpeedEMAAlpha;
+                    
+                    // Debug EMA updates occasionally
+                    if (Math.random() < 0.01) { // 1% chance to log
+                        console.log(`📊 EMA Update: ${oldEMA.toFixed(1)} → ${this.scrollSpeedEMA.toFixed(1)} (current: ${this.currentScrollSpeed.toFixed(1)})`);
+                    }
+                    
+                    const timeSinceLastStep = now - this.lastStepTime;
+                    const targetStepInterval = 1000 / this.ncaStepsPerSecond;
+                    
+                    // Only run NCA steps during INTRO and PLAYING states
+                    if ((this.gameState === 'INTRO' || this.gameState === 'PLAYING') && timeSinceLastStep >= targetStepInterval) {
+                        const success = await this.runSynchronizedStep();
+                        if (!success) {
+                            this.isRunning = false;
+                            console.error('❌ NCA step failed');
+                            return;
+                        }
+                        this.lastStepTime = now;
+                    }
+                    
+                    this.updateDino(deltaTime);
+                    this.updateBombs(deltaTime);
+                    this.updateExplosions(deltaTime);
+                    this.updateClouds(deltaTime);
+                    this.renderState();
+                    this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area
+                    
+                    // Check for collisions after rendering (when bounding boxes are updated)
+                    if (this.gameState === 'PLAYING' && this.checkCollisions()) {
+                        this.gameOver();
+                        // Don't return - keep the game loop running for restart functionality
+                    }
+                    
+                    this.updateUI();
+                    
+                    requestAnimationFrame(runLoop);
+                };
+                
+                this.lastUpdateTime = performance.now();
+                this.lastStepTime = performance.now();
+                requestAnimationFrame(runLoop);
+            }
+            
+            startPlaying() {
+                this.gameState = 'PLAYING';
+                this.gameStartTime = Date.now();
+                this.bombTutorialShown = false;
+                
+                // Show dino and hide title
+                this.dinoCharacter.style.display = 'block';
+                this.gameTitle.style.display = 'none';
+                
+                console.log('🦕 Game started! Jump with SPACEBAR, bomb with B!');
+                console.log('🎮 Starting actual gameplay - dino should be visible now');
+                console.log(`🦕 Dino display: ${this.dinoCharacter.style.display}, position: ${this.dinoCharacter.style.left}, ${this.dinoCharacter.style.top}`);
+            }
+            
+            showBombTutorial() {
+                this.bombTutorialShown = true;
+                this.gameTitle.style.display = 'block';
+                this.gameTitle.textContent = 'Press <B> for a bomb';
+                
+                // Hide tutorial after 3 seconds
+                setTimeout(() => {
+                    if (this.gameState === 'PLAYING') {
+                        this.gameTitle.classList.add('fade-out');
+                        setTimeout(() => {
+                            this.gameTitle.style.display = 'none';
+                            this.gameTitle.classList.remove('fade-out');
+                        }, 300);
+                    }
+                }, 3000);
+                
+                console.log('💣 Showing bomb tutorial');
+            }
+            
+            restartGame() {
+                console.log('🔄 Full restart initiated');
+                
+                // Stop the current game loop completely
+                this.isRunning = false;
+                
+                // Reset all game state to initial values
+                this.worldOffset = 0;
+                this.windowStartX = 0;
+                this.score = 0;
+                this.isGameOver = false;
+                this.gameStartTime = 0;
+                this.bombTutorialShown = false;
+                
+                // Reset dino state completely
+                this.dinoY = this.dinoGroundY;
+                this.dinoVelocityY = 0;
+                this.dinoGrounded = true;
+                this.dinoJumping = false;
+                this.dinoAnimFrame = 0;
+                this.dinoIsJumping = false;
+                this.jumpStartTime = 0;
+                this.jumpStartWorldX = 0;
+                
+                // Clear all game objects
+                this.bombs = [];
+                this.explosions = [];
+                this.clouds = [];
+                this.cactusBounds = [];
+                this.cactusBoundingBoxes = [];
+                this.dinoBoundingBoxes = [];
+                this.destroyedAreas.clear();
+                
+                // Reset scroll speed
+                this.currentScrollSpeed = 0;
+                this.scrollSpeedEMA = this.baseScrollSpeed;
+                
+                // Start intro sequence immediately
+                this.gameState = 'INTRO';
+                this.gameTitle.style.display = 'block';
+                this.gameTitle.style.top = '50%';
+                this.gameTitle.textContent = 'Dino in NCA-land';
+                this.dinoCharacter.style.display = 'block';
+                this.gameOverDisplay.style.display = 'none';
+                this.scoreDisplay.textContent = '0';
+                
+                // Start the game loop immediately in intro mode
+                this.isRunning = true;
+                
+                // Completely reinitialize the terrain
+                this.createInitialState();
+                
+                // Render the reset state
+                if (this.session) {
+                    this.renderState();
+                    this.updateUI();
+                }
+                
+                // Restart the game loop manually (don't call startGame to avoid duplicate setup)
+                this.lastUpdateTime = performance.now();
+                this.lastStepTime = performance.now();
+                
+                // Start the runLoop again
+                const runLoop = async () => {
+                    if (!this.isRunning) return;
+                    
+                    const now = performance.now();
+                    const deltaTime = (now - this.lastUpdateTime) / 1000;
+                    this.lastUpdateTime = now;
+                    
+                    const sync = this.calculateSynchronizedGeneration();
+                    
+                    // Handle different game states
+                    if (this.gameState === 'INTRO') {
+                        // During intro, only generation happens - no scrolling
+                        // Check if generation reached the edge
+                        if (sync.actualGenerationEdge >= (this.width * this.generationTargetPercent)) {
+                            this.gameState = 'WAITING';
+                            this.gameTitle.textContent = 'Press <space> to jump';
+                            console.log('🦕 Ready to play! Press SPACEBAR to start jumping!');
+                            console.log('🎮 Transitioned to WAITING state');
+                        }
+                    } else if (this.gameState === 'WAITING') {
+                        // Wait for spacebar press - no movement
+                    } else if (this.gameState === 'PLAYING') {
+                        // Normal gameplay - scrolling and physics
+                        this.updateDynamicScrollSpeed(sync, deltaTime);
+                        this.worldOffset += this.currentScrollSpeed * deltaTime;
+                        
+                        // Show bomb tutorial after 5 seconds
+                        if (!this.bombTutorialShown && Date.now() - this.gameStartTime > 5000) {
+                            this.showBombTutorial();
+                        }
+                    } else if (this.gameState === 'GAME_OVER') {
+                        // Game over - wait for restart input, no updates
+                    }
+                    
+                    // Update score only during PLAYING state
+                    if (this.gameState === 'PLAYING') {
+                        this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
+                        this.scoreDisplay.textContent = this.score.toString().padStart(5, '0'); // Show score with leading zeros
+                    }
+                    
+                    // Update EMA of scroll speed for stable jump mechanics
+                    const oldEMA = this.scrollSpeedEMA;
+                    this.scrollSpeedEMA = this.scrollSpeedEMA * (1 - this.scrollSpeedEMAAlpha) + 
+                                         this.currentScrollSpeed * this.scrollSpeedEMAAlpha;
+                    
+                    // Debug EMA updates occasionally
+                    if (Math.random() < 0.01) { // 1% chance to log
+                        console.log(`📊 EMA Update: ${oldEMA.toFixed(1)} → ${this.scrollSpeedEMA.toFixed(1)} (current: ${this.currentScrollSpeed.toFixed(1)})`);
+                    }
+                    
+                    const timeSinceLastStep = now - this.lastStepTime;
+                    const targetStepInterval = 1000 / this.ncaStepsPerSecond;
+                    
+                    // Only run NCA steps during INTRO and PLAYING states
+                    if ((this.gameState === 'INTRO' || this.gameState === 'PLAYING') && timeSinceLastStep >= targetStepInterval) {
+                        const success = await this.runSynchronizedStep();
+                        if (!success) {
+                            this.isRunning = false;
+                            console.error('❌ NCA step failed');
+                            return;
+                        }
+                        this.lastStepTime = now;
+                    }
+                    
+                    this.updateDino(deltaTime);
+                    this.updateBombs(deltaTime);
+                    this.updateExplosions(deltaTime);
+                    this.updateClouds(deltaTime);
+                    this.renderState();
+                    this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area
+                    
+                    // Check for collisions after rendering (when bounding boxes are updated)
+                    if (this.gameState === 'PLAYING' && this.checkCollisions()) {
+                        this.gameOver();
+                        // Don't return - keep the game loop running for restart functionality
+                    }
+                    
+                    this.updateUI();
+                    
+                    requestAnimationFrame(runLoop);
+                };
+                
+                requestAnimationFrame(runLoop);
+                
+                console.log('🔄 Game restarted! Watch the NCA world regenerate...');
+                console.log('🔄 Full restart complete - intro sequence starting automatically');
+            }
+        }
+        
+        // Create and auto-load game on page load
+        window.addEventListener('load', () => {
+            const game = new NCADinoGame();
+            // Auto-load the model after a brief delay
+            setTimeout(() => game.loadModel(), 100);
+        });
+        
+        window.addEventListener('resize', () => {
+            if (window.ncaGame) {
+                window.ncaGame.positionGenerationMarker();
+            }
+        });
+    </script>
+</body>
+</html>
