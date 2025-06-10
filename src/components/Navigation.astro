@@ -1,13 +1,18 @@
 ---
-// Get current page for navigation highlighting
+import { getCollection } from 'astro:content';
+
+// Get current page for navigation highlighting  
 const currentPath = Astro.url.pathname;
 
+// Use Astro's base path for proper GitHub Pages routing
+const base = import.meta.env.BASE_URL || '/';
+
 const navItems = [
-	{ href: '/', label: 'Home', exact: true },
-	{ href: '/cv', label: 'Curriculum Vitae' },
-	{ href: '/blog', label: 'Blog' },
-	{ href: '/nca-dino-game', label: 'NCA Dino' },
-	{ href: '/links', label: 'Links' }
+	{ href: `${base}`, label: 'Home', exact: true },
+	{ href: `${base}cv/`, label: 'Curriculum Vitae' },
+	{ href: `${base}blog/`, label: 'Blog' },
+	{ href: `${base}nca-dino-game/`, label: 'NCA Dino' },
+	{ href: `${base}links/`, label: 'Links' }
 ];
 
 function isActive(item, currentPath) {
