@@ -9,6 +9,7 @@ import rehypeMathjax from 'rehype-mathjax';
 export default defineConfig({
   site: 'https://yozhikoff.github.io',
   base: '/personal-page',
+  trailingSlash: 'always',
   integrations: [
     mdx({
       remarkPlugins: [remarkMath],
