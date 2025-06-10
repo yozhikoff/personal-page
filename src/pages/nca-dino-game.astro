@@ -635,9 +635,9 @@ import PageHeader from '../components/PageHeader.astro';
             // Position dino feet at ground surface, accounting for jump height
             const dinoGameY = this.gameHeight - groundSurfacePixelsFromBottom - jumpHeightPixels - dinoSpriteHeight;
             
-            // Position dino
+            // Position dino (sprite moved 2px up for better visual alignment)
             this.dinoCharacter.style.left = `${dinoPixelX}px`;
-            this.dinoCharacter.style.top = `${dinoGameY}px`;
+            this.dinoCharacter.style.top = `${dinoGameY - 2}px`;
             
             // Update dino bounding box for collision detection
             this.updateDinoBoundingBox(dinoPixelX, dinoGameY);
@@ -1849,7 +1849,7 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 this.updateExplosions(deltaTime);
                 this.updateClouds(deltaTime);
                 this.renderState();
-                // this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area - TEMPORARILY DISABLED FOR PERFORMANCE
+                this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area
                 
                 // Check for collisions after rendering (when bounding boxes are updated)
                 if (this.gameState === 'PLAYING' && this.checkCollisions()) {
@@ -2035,7 +2035,7 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 this.updateExplosions(deltaTime);
                 this.updateClouds(deltaTime);
                 this.renderState();
-                // this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area - TEMPORARILY DISABLED FOR PERFORMANCE
+                this.renderGameAreaOverlay(); // Draw bombs and clouds over the game area
                 
                 // Check for collisions after rendering (when bounding boxes are updated)
                 if (this.gameState === 'PLAYING' && this.checkCollisions()) {
