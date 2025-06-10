@@ -13,14 +13,18 @@ import PageHeader from '../components/PageHeader.astro';
         </div>
         
         
-        <!-- Use iframe for optimal performance - matches original HTML file -->
-        <iframe 
-            src={`${import.meta.env.BASE_URL}nca_dino_game_enhanced_intro.html`}
-            width="774" 
-            height="246" 
-            style="border: 3px solid #333; border-radius: 8px; display: block; margin: 20px auto; background: white;"
-            frameborder="0">
-        </iframe>
+        <!-- Game Area for embedded NCA Dino Game -->
+        <div id="gameArea" class="game-area">
+            <canvas id="ncaCanvas" width="768" height="128" class="nca-canvas"></canvas>
+            <img id="dinoCharacter" class="dino-character" style="display: none;">
+            <div id="scoreDisplay" class="score-display">Score: 0</div>
+            <img id="gameOverDisplay" class="game-over-display" style="display: none;">
+            <div id="gameTitle" class="game-title">🦕 NCA Dino Adventure</div>
+            <div id="generationMarker" class="generation-marker"></div>
+            <button id="debugToggleBtn" class="debug-toggle-btn">Debug</button>
+        </div>
+        
+        <div id="debugWindow" class="debug-window" style="display: none;"></div>
     </main>
 </Layout>
 
