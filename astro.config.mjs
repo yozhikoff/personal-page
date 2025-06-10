@@ -8,7 +8,6 @@ import rehypeMathjax from 'rehype-mathjax';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://yozhikoff.github.io',
-  base: '/personal-page',
   trailingSlash: 'always',
   integrations: [
     mdx({
