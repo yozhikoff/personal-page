@@ -440,18 +440,36 @@ import PageHeader from '../components/PageHeader.astro';
         }
         
         setupEventListeners() {
-            this.debugToggleBtn.addEventListener('click', () => {
+            this.debugToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                
                 if (this.debugWindow.style.display === 'none') {
                     this.debugWindow.style.display = 'block';
-                    this.debugToggleBtn.textContent = 'Hide Debug Info';
+                    this.debugToggleBtn.textContent = 'Debug';
                     this.showDebugBoxes = true;
                     this.generationMarker.style.display = 'block';
                 } else {
                     this.debugWindow.style.display = 'none';
-                    this.debugToggleBtn.textContent = 'Show Debug Info';
+                    this.debugToggleBtn.textContent = 'Debug';
                     this.showDebugBoxes = false;
                     this.generationMarker.style.display = 'none';
                 }
+                
+                // Remove focus and prevent any keyboard interaction
+                this.debugToggleBtn.blur();
+                this.debugToggleBtn.setAttribute('tabindex', '-1');
+                
+                return false;
+            });
+            
+            // Prevent debug button from receiving keyboard events
+            this.debugToggleBtn.addEventListener('keydown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return false;
             });
             
             // Dino jump controls
@@ -635,9 +653,9 @@ import PageHeader from '../components/PageHeader.astro';
             // Position dino feet at ground surface, accounting for jump height
             const dinoGameY = this.gameHeight - groundSurfacePixelsFromBottom - jumpHeightPixels - dinoSpriteHeight;
             
-            // Position dino (sprite moved 2px up for better visual alignment)
+            // Position dino (sprite moved 6px up for better visual alignment)
             this.dinoCharacter.style.left = `${dinoPixelX}px`;
-            this.dinoCharacter.style.top = `${dinoGameY - 2}px`;
+            this.dinoCharacter.style.top = `${dinoGameY - 6}px`;
             
             // Update dino bounding box for collision detection
             this.updateDinoBoundingBox(dinoPixelX, dinoGameY);
