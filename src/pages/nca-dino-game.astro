@@ -163,23 +163,26 @@ import PageHeader from '../components/PageHeader.astro';
 <script>
     // Register service worker for SharedArrayBuffer support on GitHub Pages
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        // Check if we already reloaded once
+        const hasReloaded = sessionStorage.getItem('sw-reloaded');
+        
         navigator.serviceWorker.register('/coi-serviceworker.js')
             .then(registration => {
                 console.log('🚀 COI Service Worker registered successfully');
-                if (registration.active) {
-                    // Service worker is already active, reload to apply headers
-                    window.location.reload();
-                    return;
-                }
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'activated') {
-                            console.log('🔄 Service worker activated, reloading page');
-                            window.location.reload();
-                        }
+                
+                // Only reload once per session when service worker first installs
+                if (!hasReloaded && !registration.active) {
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'activated') {
+                                console.log('🔄 Service worker activated, reloading once');
+                                sessionStorage.setItem('sw-reloaded', 'true');
+                                window.location.reload();
+                            }
+                        });
                     });
-                });
+                }
             })
             .catch(error => {
                 console.log('❌ Service worker registration failed:', error);
