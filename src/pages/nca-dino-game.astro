@@ -344,6 +344,9 @@ import PageHeader from '../components/PageHeader.astro';
             this.pixelScale = 4;    // 4x scaling for bigger visuals!
             this.fireRate = 0.5;
             
+            // Enable adaptive sparse optimization (fire + alive mask)
+            this.useAdaptiveSparse = true;
+            
             // Native ONNX tensors
             this.currentState = null;
             this.session = null;
@@ -1430,7 +1433,9 @@ import PageHeader from '../components/PageHeader.astro';
                             executionProviders: config.providers
                         } : {}; // No providers = auto selection
                         
-                        const modelUrl = `/nca_model_${this.selectedModelSize}px.onnx?t=${Date.now()}`;
+                        const modelUrl = this.useAdaptiveSparse 
+                            ? `/nca_adaptive_sparse_model.onnx?t=${Date.now()}`
+                            : `/nca_model_${this.selectedModelSize}px.onnx?t=${Date.now()}`;
                         this.session = await ort.InferenceSession.create(modelUrl, sessionOptions);
                         
                         // Store successful backend info
@@ -1455,7 +1460,7 @@ import PageHeader from '../components/PageHeader.astro';
                 this.createInitialState();
                 this.renderState();
                 
-                console.log('✅ Model loaded! Ready to start the enhanced dino adventure.');
+                console.log(`✅ Model loaded! Using ${this.useAdaptiveSparse ? '🔥 ADAPTIVE SPARSE (Fire+Alive)' : 'STANDARD'} model. Ready to start!`);
                 
                 // Log initial memory usage
                 this.updateMemoryStats();
@@ -1744,17 +1749,20 @@ import PageHeader from '../components/PageHeader.astro';
                 }
             }
             
-            const feeds = { nca_state: inferenceState, fire_mask: inferenceMask };
+            const feeds = this.useAdaptiveSparse 
+                ? { input: inferenceState, fire_mask: inferenceMask }
+                : { nca_state: inferenceState, fire_mask: inferenceMask };
             const results = await this.session.run(feeds);
             
-            if (!results.next_nca_state || !results.next_nca_state.data) {
+            const outputKey = this.useAdaptiveSparse ? 'output' : 'next_nca_state';
+            if (!results[outputKey] || !results[outputKey].data) {
                 console.error('Invalid ONNX results');
                 return false;
             }
             
             // Copy results back
             if (this.currentWidth === this.modelWidth) {
-                this.currentState.copyFrom(results.next_nca_state);
+                this.currentState.copyFrom(results[outputKey]);
             } else if (this.currentWidth > this.modelWidth) {
                 const batch = 0;
                 const copyWidth = Math.min(this.modelWidth, this.currentWidth - inferenceWindowStart);
@@ -1762,7 +1770,7 @@ import PageHeader from '../components/PageHeader.astro';
                 for (let c = 0; c < this.channels; c++) {
                     for (let y = 0; y < this.height; y++) {
                         for (let x = 0; x < copyWidth; x++) {
-                            const value = results.next_nca_state.get(batch, c, y, x);
+                            const value = results[outputKey].get(batch, c, y, x);
                             this.currentState.set(batch, c, y, inferenceWindowStart + x, value);
                         }
                     }
@@ -1775,7 +1783,7 @@ import PageHeader from '../components/PageHeader.astro';
                 for (let c = 0; c < this.channels; c++) {
                     for (let y = 0; y < this.height; y++) {
                         for (let x = 0; x < copyWidth; x++) {
-                            const value = results.next_nca_state.get(batch, c, y, x);
+                            const value = results[outputKey].get(batch, c, y, x);
                             this.currentState.set(batch, c, y, x, value);
                         }
                     }
