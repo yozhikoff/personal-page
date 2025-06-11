@@ -1,4 +1,4 @@
-/*! coi-serviceworker v0.1.7 - Guido Zuidhof and contributors, licensed under MIT */
+/*! coi-serviceworker v0.1.7-fixed - Guido Zuidhof and contributors, licensed under MIT */
 let coepCredentialless = false;
 if (typeof window === 'undefined') {
     self.addEventListener("install", () => self.skipWaiting());
@@ -24,6 +24,13 @@ if (typeof window === 'undefined') {
     self.addEventListener("fetch", function (event) {
         const r = event.request;
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
+            return;
+        }
+
+        // Skip images and other media - they don't need SharedArrayBuffer
+        // Also skip external origins that might not have proper CORS headers
+        if (r.destination === 'image' || r.destination === 'video' || r.destination === 'audio' || 
+            (r.url && !r.url.startsWith(self.location.origin))) {
             return;
         }
 

@@ -163,10 +163,20 @@ import PageHeader from '../components/PageHeader.astro';
 <script>
     // Register service worker for SharedArrayBuffer support on GitHub Pages
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        // First, unregister any existing global service workers
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => {
+                if (registration.scope.endsWith('/') && !registration.scope.includes('nca-dino-game')) {
+                    console.log('🧹 Unregistering global service worker:', registration.scope);
+                    registration.unregister();
+                }
+            });
+        });
+        
         // Check if we already reloaded once
         const hasReloaded = sessionStorage.getItem('sw-reloaded');
         
-        navigator.serviceWorker.register('/coi-serviceworker.js')
+        navigator.serviceWorker.register('/coi-serviceworker.js?v=2', { scope: '/nca-dino-game/' })
             .then(registration => {
                 console.log('🚀 COI Service Worker registered successfully');
                 
