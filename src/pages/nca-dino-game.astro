@@ -1905,6 +1905,21 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 // Update score only during PLAYING state
                 if (this.gameState === 'PLAYING') {
                     this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
+                    
+                    // Debug: Catch NaN early
+                    if (isNaN(this.score) || isNaN(this.worldOffset) || isNaN(this.pixelScale)) {
+                        console.error('🚨 NaN detected!', {
+                            score: this.score,
+                            worldOffset: this.worldOffset,
+                            pixelScale: this.pixelScale,
+                            currentWidth: this.currentWidth,
+                            totalSteps: this.totalSteps
+                        });
+                        // Prevent NaN from showing
+                        this.score = 0;
+                        this.worldOffset = 0;
+                    }
+                    
                     const displayScore = Math.max(0, this.score - this.scorePenalties); // Subtract penalties, minimum 0
                     this.scoreDisplay.textContent = displayScore.toString().padStart(5, '0'); // Show score with leading zeros
                 }
@@ -2005,6 +2020,12 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
             this.scorePenalties = 0;
             this.isGameOver = false;
             
+            // Reset NCA state tracking (CRITICAL for preventing NaN!)
+            this.currentWidth = this.width;
+            this.totalSteps = 0;
+            this.extensionCount = 0;
+            this.trimCount = 0;
+            
             // Reset FPS tracking
             this.frameTimes = [];
             this.lastFrameTime = performance.now();
@@ -2046,6 +2067,16 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
             
             // Start the game loop immediately in intro mode
             this.isRunning = true;
+            
+            // Dispose old state to prevent memory leaks
+            if (this.currentState) {
+                try {
+                    this.currentState.dispose();
+                } catch (e) {
+                    console.warn('Failed to dispose current state:', e);
+                }
+                this.currentState = null;
+            }
             
             // Completely reinitialize the terrain
             this.createInitialState();
@@ -2106,6 +2137,21 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 // Update score only during PLAYING state
                 if (this.gameState === 'PLAYING') {
                     this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
+                    
+                    // Debug: Catch NaN early
+                    if (isNaN(this.score) || isNaN(this.worldOffset) || isNaN(this.pixelScale)) {
+                        console.error('🚨 NaN detected!', {
+                            score: this.score,
+                            worldOffset: this.worldOffset,
+                            pixelScale: this.pixelScale,
+                            currentWidth: this.currentWidth,
+                            totalSteps: this.totalSteps
+                        });
+                        // Prevent NaN from showing
+                        this.score = 0;
+                        this.worldOffset = 0;
+                    }
+                    
                     const displayScore = Math.max(0, this.score - this.scorePenalties); // Subtract penalties, minimum 0
                     this.scoreDisplay.textContent = displayScore.toString().padStart(5, '0'); // Show score with leading zeros
                 }
