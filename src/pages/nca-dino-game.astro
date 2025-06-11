@@ -161,6 +161,31 @@ import PageHeader from '../components/PageHeader.astro';
 </style>
 
 <script>
+    // Register service worker for SharedArrayBuffer support on GitHub Pages
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/coi-serviceworker.js')
+            .then(registration => {
+                console.log('🚀 COI Service Worker registered successfully');
+                if (registration.active) {
+                    // Service worker is already active, reload to apply headers
+                    window.location.reload();
+                    return;
+                }
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'activated') {
+                            console.log('🔄 Service worker activated, reloading page');
+                            window.location.reload();
+                        }
+                    });
+                });
+            })
+            .catch(error => {
+                console.log('❌ Service worker registration failed:', error);
+            });
+    }
+
     // Load ONNX Runtime dynamically and initialize game when ready
     function loadONNXAndInitialize() {
         const script = document.createElement('script');
