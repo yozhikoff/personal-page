@@ -15,5 +15,11 @@ export default defineConfig({
       rehypePlugins: [rehypeMathjax]
     }),
     tailwind()
-  ]
+  ],
+  server: {
+    headers: {
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+      'Cross-Origin-Opener-Policy': 'same-origin'
+    }
+  }
 });
