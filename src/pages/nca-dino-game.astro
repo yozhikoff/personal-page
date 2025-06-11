@@ -18,6 +18,7 @@ import PageHeader from '../components/PageHeader.astro';
             <canvas id="ncaCanvas" width="768" height="128" class="nca-canvas"></canvas>
             <img id="dinoCharacter" class="dino-character" style="display: none;">
             <div id="scoreDisplay" class="score-display">Score: 0</div>
+            <div id="scorePenalty" class="score-penalty" style="display: none;">-50</div>
             <img id="gameOverDisplay" class="game-over-display" style="display: none;">
             <div id="gameTitle" class="game-title">🦕 NCA Dino Adventure</div>
             <div id="generationMarker" class="generation-marker"></div>
@@ -65,6 +66,22 @@ import PageHeader from '../components/PageHeader.astro';
         color: #333;
         z-index: 20;
         text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+    }
+    .score-penalty {
+        position: absolute;
+        top: 35px;
+        right: 10px;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        font-weight: bold;
+        color: #ff4444;
+        z-index: 21;
+        text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
+        animation: penalty-fade 2s ease-out forwards;
+    }
+    @keyframes penalty-fade {
+        0% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(10px); }
     }
     .game-over-display {
         position: absolute;
@@ -278,6 +295,7 @@ import PageHeader from '../components/PageHeader.astro';
             this.dinoCharacter = document.getElementById('dinoCharacter');
             this.gameArea = document.getElementById('gameArea');
             this.scoreDisplay = document.getElementById('scoreDisplay');
+            this.scorePenalty = document.getElementById('scorePenalty');
             this.gameOverDisplay = document.getElementById('gameOverDisplay');
             this.gameTitle = document.getElementById('gameTitle');
             this.debugWindow = document.getElementById('debugWindow');
@@ -407,6 +425,7 @@ import PageHeader from '../components/PageHeader.astro';
             
             // Score tracking
             this.score = 0; // Score based on world coordinates traveled
+            this.scorePenalties = 0; // Total penalties from bombs
             
             // Memory monitoring
             this.memoryStats = {
@@ -599,7 +618,33 @@ import PageHeader from '../components/PageHeader.astro';
             this.bombs.push(bomb);
             this.lastBombTime = now;
             
-            console.log(`💣 BOMB THROWN! Screen: (${bomb.x.toFixed(1)}, ${bomb.y.toFixed(1)}), World NCA: ${bomb.worldX.toFixed(1)}, WorldOffset: ${this.worldOffset.toFixed(1)}, WindowStart: ${this.windowStartX}`);
+            // Apply score penalty: -50 points (but can't exceed current score)
+            const currentBaseScore = Math.floor(this.worldOffset / this.pixelScale);
+            const maxAllowedPenalties = currentBaseScore;
+            this.scorePenalties = Math.min(this.scorePenalties + 50, maxAllowedPenalties);
+            
+            // Show penalty animation
+            this.showScorePenalty();
+            
+            console.log(`💣 BOMB THROWN! Score penalty: -50 (new score: ${this.score}). Screen: (${bomb.x.toFixed(1)}, ${bomb.y.toFixed(1)}), World NCA: ${bomb.worldX.toFixed(1)}, WorldOffset: ${this.worldOffset.toFixed(1)}, WindowStart: ${this.windowStartX}`);
+        }
+        
+        showScorePenalty() {
+            // Reset animation by hiding and showing again
+            this.scorePenalty.style.display = 'none';
+            this.scorePenalty.style.animation = 'none';
+            
+            // Force reflow to reset animation
+            this.scorePenalty.offsetHeight;
+            
+            // Show with animation
+            this.scorePenalty.style.display = 'block';
+            this.scorePenalty.style.animation = 'penalty-fade 2s ease-out forwards';
+            
+            // Hide after animation completes
+            setTimeout(() => {
+                this.scorePenalty.style.display = 'none';
+            }, 2000);
         }
         
         updateDino(deltaTime) {
@@ -1835,7 +1880,8 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 // Update score only during PLAYING state
                 if (this.gameState === 'PLAYING') {
                     this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
-                    this.scoreDisplay.textContent = this.score.toString().padStart(5, '0'); // Show score with leading zeros
+                    const displayScore = Math.max(0, this.score - this.scorePenalties); // Subtract penalties, minimum 0
+                    this.scoreDisplay.textContent = displayScore.toString().padStart(5, '0'); // Show score with leading zeros
                 }
                 
                 // Update EMA of scroll speed for stable jump mechanics
@@ -1931,6 +1977,7 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
             this.worldOffset = 0;
             this.windowStartX = 0;
             this.score = 0;
+            this.scorePenalties = 0;
             this.isGameOver = false;
             this.gameStartTime = 0;
             this.bombTutorialShown = false;
@@ -2021,7 +2068,8 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 // Update score only during PLAYING state
                 if (this.gameState === 'PLAYING') {
                     this.score = Math.floor(this.worldOffset / this.pixelScale); // Score = NCA pixels traveled
-                    this.scoreDisplay.textContent = this.score.toString().padStart(5, '0'); // Show score with leading zeros
+                    const displayScore = Math.max(0, this.score - this.scorePenalties); // Subtract penalties, minimum 0
+                    this.scoreDisplay.textContent = displayScore.toString().padStart(5, '0'); // Show score with leading zeros
                 }
                 
                 // Update EMA of scroll speed for stable jump mechanics
