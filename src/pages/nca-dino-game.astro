@@ -5,7 +5,7 @@ import PageHeader from '../components/PageHeader.astro';
 
 <Layout title="NCA Dino Game">
     <PageHeader />
-    <main class="mx-auto px-2 py-8" style="max-width: 800px;">
+    <main class="mx-auto px-2 py-8" style="max-width: 800px; overflow-x: hidden;">
         <h1 class="text-3xl font-bold mb-4 text-center">🦕 NCA Dino Game</h1>
         
         <div class="jump-instruction">
@@ -40,6 +40,18 @@ import PageHeader from '../components/PageHeader.astro';
         width: 768px;
         height: 240px;
         overflow: hidden;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+    
+    /* Mobile responsive scaling */
+    @media (max-width: 800px) {
+        .game-area {
+            margin: 20px 10px;
+            transform-origin: center;
+            /* Scale to fit mobile screens while maintaining aspect ratio */
+            transform: scale(calc(min(100vw - 20px, 768px) / 768));
+        }
     }
     .nca-canvas {
         display: block;
