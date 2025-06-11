@@ -131,7 +131,7 @@ import PageHeader from '../components/PageHeader.astro';
         position: absolute;
         top: 10px;
         left: 10px;
-        z-index: 50;
+        z-index: 30;
     }
     .debug-toggle-btn:hover {
         background-color: #f0f0f0;
@@ -427,6 +427,11 @@ import PageHeader from '../components/PageHeader.astro';
             this.score = 0; // Score based on world coordinates traveled
             this.scorePenalties = 0; // Total penalties from bombs
             
+            // FPS tracking
+            this.frameTimes = [];
+            this.lastFrameTime = performance.now();
+            this.currentFPS = 0;
+            
             // Memory monitoring
             this.memoryStats = {
                 jsHeapSize: 0,
@@ -489,6 +494,17 @@ import PageHeader from '../components/PageHeader.astro';
                 e.stopPropagation();
                 e.stopImmediatePropagation();
                 return false;
+            });
+            
+            // Handle mobile touch events properly for debug button
+            this.debugToggleBtn.addEventListener('touchstart', (e) => {
+                e.stopPropagation(); // Prevent game from receiving this touch
+                // Don't preventDefault - allow the touch to work for clicking
+            });
+            
+            this.debugToggleBtn.addEventListener('touchend', (e) => {
+                e.stopPropagation(); // Prevent game from receiving this touch
+                // Don't preventDefault - allow the touch to work for clicking
             });
             
             // Dino jump controls
@@ -1801,7 +1817,8 @@ import PageHeader from '../components/PageHeader.astro';
             // Format debug output
             const formatMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
             
-            let debugText = `Dino Position: 15%
+            let debugText = `FPS: ${this.currentFPS.toFixed(1)}
+Dino Position: 15%
 Dino Status: ${this.dinoIsJumping ? 'Jumping' : 'Running'}
 Dino Height: ${this.dinoIsJumping ? `+${(this.dinoGroundY - this.dinoY).toFixed(0)} cells` : 'On Ground'}
 World Position: ${Math.floor(this.worldOffset)}
@@ -1849,6 +1866,14 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 const now = performance.now();
                 const deltaTime = (now - this.lastUpdateTime) / 1000;
                 this.lastUpdateTime = now;
+                
+                // Calculate FPS
+                const frameTime = now - this.lastFrameTime;
+                this.lastFrameTime = now;
+                this.frameTimes.push(frameTime);
+                if (this.frameTimes.length > 60) this.frameTimes.shift();
+                const avgFrameTime = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+                this.currentFPS = avgFrameTime > 0 ? (1000 / avgFrameTime) : 0;
                 
                 const sync = this.calculateSynchronizedGeneration();
                 
@@ -1979,6 +2004,11 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
             this.score = 0;
             this.scorePenalties = 0;
             this.isGameOver = false;
+            
+            // Reset FPS tracking
+            this.frameTimes = [];
+            this.lastFrameTime = performance.now();
+            this.currentFPS = 0;
             this.gameStartTime = 0;
             this.bombTutorialShown = false;
             
@@ -2037,6 +2067,14 @@ Providers: ${this.backendInfo.providers.join(', ')}`;
                 const now = performance.now();
                 const deltaTime = (now - this.lastUpdateTime) / 1000;
                 this.lastUpdateTime = now;
+                
+                // Calculate FPS
+                const frameTime = now - this.lastFrameTime;
+                this.lastFrameTime = now;
+                this.frameTimes.push(frameTime);
+                if (this.frameTimes.length > 60) this.frameTimes.shift();
+                const avgFrameTime = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
+                this.currentFPS = avgFrameTime > 0 ? (1000 / avgFrameTime) : 0;
                 
                 const sync = this.calculateSynchronizedGeneration();
                 
